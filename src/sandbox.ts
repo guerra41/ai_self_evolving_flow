@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { allowlistedEnv, runBounded } from './isolation.js';
 
 export interface SandboxResult {
   success: boolean;
@@ -11,14 +11,28 @@ export interface SandboxResult {
   error?: string;
 }
 
+/**
+ * Isolation applied to the child that executes LLM-generated code:
+ *  - empty temporary working directory (the repo, tests/ and eval/ are not the cwd)
+ *  - allowlisted environment (no API keys)
+ *  - Node permission model: no file writes, no child processes, no workers,
+ *    reads limited to the temporary directory
+ *  - hard timeout with SIGKILL, heap limit, and a cap on captured output
+ * Not covered: network access (Node's permission model does not restrict it).
+ * Use Docker with --network none for full isolation.
+ */
 export async function runInSandbox(
   taskJson: unknown,
   timeoutMs: number,
   memoryMb: number,
 ): Promise<SandboxResult> {
+  if (!process.allowedNodeEnvironmentFlags.has('--permission')) {
+    return { success: false, error: 'Node permission model unavailable; Node 22.3 or newer is required' };
+  }
+
   const tempDirectory = await mkdtemp(join(tmpdir(), 'ai-evolution-'));
-  const bundlePath = join(tempDirectory, 'task-agent.js');
-  const runnerPath = join(tempDirectory, 'runner.js');
+  const bundlePath = join(tempDirectory, 'task-agent.mjs');
+  const runnerPath = join(tempDirectory, 'runner.mjs');
 
   try {
     await build({
@@ -27,7 +41,7 @@ export async function runInSandbox(
       bundle: true,
       platform: 'node',
       format: 'esm',
-      target: 'node18',
+      target: 'node22',
     });
 
     await writeFile(
@@ -39,7 +53,35 @@ export async function runInSandbox(
       ].join('\n'),
     );
 
-    return await runChildProcess(runnerPath, timeoutMs, memoryMb);
+    const result = await runBounded(
+      process.execPath,
+      [
+        `--max-old-space-size=${memoryMb}`,
+        '--permission',
+        `--allow-fs-read=${tempDirectory}`,
+        runnerPath,
+      ],
+      { cwd: tempDirectory, timeoutMs, env: allowlistedEnv() },
+    );
+
+    if (result.spawnError) {
+      return { success: false, error: result.spawnError };
+    }
+    if (result.timedOut) {
+      return { success: false, error: `Sandbox timed out after ${timeoutMs} ms` };
+    }
+    if (result.outputExceeded) {
+      return { success: false, error: 'Sandbox output exceeded the size cap' };
+    }
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr.trim().slice(0, 500) || `Sandbox exited with code ${result.code}` };
+    }
+
+    try {
+      return { success: true, output: JSON.parse(result.stdout) };
+    } catch {
+      return { success: false, error: 'Invalid sandbox output' };
+    }
   } catch (error) {
     return {
       success: false,
@@ -48,52 +90,4 @@ export async function runInSandbox(
   } finally {
     await rm(tempDirectory, { recursive: true, force: true });
   }
-}
-
-function runChildProcess(
-  runnerPath: string,
-  timeoutMs: number,
-  memoryMb: number,
-): Promise<SandboxResult> {
-  return new Promise((resolvePromise) => {
-    const child = spawn(
-      process.execPath,
-      [`--max-old-space-size=${memoryMb}`, runnerPath],
-      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_OPTIONS: '' } },
-    );
-
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => child.kill(), timeoutMs);
-
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => (stdout += chunk));
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk: string) => (stderr += chunk));
-
-    child.on('error', (error) => {
-      clearTimeout(timer);
-      resolvePromise({ success: false, error: error.message });
-    });
-
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        resolvePromise({
-          success: false,
-          error: stderr.trim() || `Sandbox exited with code ${code}`,
-        });
-        return;
-      }
-
-      try {
-        resolvePromise({ success: true, output: JSON.parse(stdout) });
-      } catch (error) {
-        resolvePromise({
-          success: false,
-          error: error instanceof Error ? error.message : 'Invalid sandbox output',
-        });
-      }
-    });
-  });
 }

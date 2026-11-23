@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import { mkdir, readFile, writeFile, appendFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { evaluate } from './evaluator.js';
 import { generateProposal } from './meta-agent.js';
+import { manifestChanges, protectedManifest, screenSource } from './guard.js';
+import { runIsolatedTests } from './test-runner.js';
 
 const sourcePath = 'src/task-agent/TaskAgent.ts';
 const archivePath = 'outputs/archive.jsonl';
@@ -19,22 +20,8 @@ interface ArchiveRecord {
   proposal: string;
   testError?: string;
   evaluatorFailures?: string[];
-}
-
-async function runTests(): Promise<{ passed: boolean; output: string }> {
-  return new Promise((resolvePromise) => {
-    const child = spawn('pnpm', ['test'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: process.platform === 'win32',
-    });
-    let output = '';
-    child.stdout.on('data', (chunk: string) => (output += chunk));
-    child.stderr.on('data', (chunk: string) => (output += chunk));
-    child.on('close', (code) => resolvePromise({
-      passed: code === 0,
-      output,
-    }));
-  });
+  tamperedPaths?: string[];
+  rejectedBy?: string[];
 }
 
 function createDiff(before: string, after: string): string {
@@ -50,6 +37,36 @@ async function main(): Promise<void> {
     Array<{ prompt: string }>;
   const trainingPrompts = training.map((task) => task.prompt);
   const pastScores: number[] = [];
+  const baseline = await protectedManifest();
+
+  // Returns the protected files that changed since the run started. If any did, the
+  // generation is recorded as tampered, the TaskAgent is rolled back, and the run stops.
+  async function checkTamper(
+    generation: number,
+    before: string,
+    proposalSource: string,
+    proposalText: string,
+  ): Promise<void> {
+    const changed = manifestChanges(baseline, await protectedManifest());
+    if (changed.length === 0) {
+      return;
+    }
+    await writeFile(sourcePath, before, 'utf8');
+    const record: ArchiveRecord = {
+      generation,
+      codeDiff: createDiff(before, proposalSource),
+      testPass: false,
+      score: null,
+      timestamp: new Date().toISOString(),
+      proposal: proposalText,
+      tamperedPaths: changed,
+    };
+    await appendFile(archivePath, `${JSON.stringify(record)}
+`, 'utf8');
+    throw new Error(
+      `Generation ${generation}: protected files changed (${changed.join(', ')}); modification rolled back and run aborted`,
+    );
+  }
 
   for (let generation = 1; generation <= generations; generation += 1) {
     const before = await readFile(sourcePath, 'utf8');
@@ -70,8 +87,27 @@ async function main(): Promise<void> {
       continue;
     }
 
+    // Static screen first: rejected code is never written to disk or executed.
+    const violations = screenSource(proposal.source);
+    if (violations.length > 0) {
+      const record: ArchiveRecord = {
+        generation,
+        codeDiff: createDiff(before, proposal.source),
+        testPass: false,
+        score: null,
+        timestamp: new Date().toISOString(),
+        proposal: proposal.proposal,
+        rejectedBy: violations,
+      };
+      await appendFile(archivePath, `${JSON.stringify(record)}
+`, 'utf8');
+      console.log(`Generation ${generation}: rejected by source screen (${violations.join(', ')})`);
+      continue;
+    }
+
     await writeFile(sourcePath, proposal.source, 'utf8');
-    const testResult = await runTests();
+    const testResult = await runIsolatedTests(timeoutMs);
+    await checkTamper(generation, before, proposal.source, proposal.proposal);
 
     if (!testResult.passed) {
       await writeFile(sourcePath, before, 'utf8');
@@ -90,6 +126,7 @@ async function main(): Promise<void> {
     }
 
     const evaluation = await evaluate(timeoutMs, memoryMb);
+    await checkTamper(generation, before, proposal.source, proposal.proposal);
     pastScores.push(evaluation.score);
     const record: ArchiveRecord = {
       generation,
