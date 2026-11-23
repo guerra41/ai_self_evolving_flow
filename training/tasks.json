@@ -1,0 +1,10 @@
+[
+  { "prompt": "Convert text to uppercase." },
+  { "prompt": "Convert text to lowercase." },
+  { "prompt": "Reverse a text string." },
+  { "prompt": "Count whitespace-separated words." },
+  { "prompt": "Sum an array of numbers." },
+  { "prompt": "Find the maximum of an array." },
+  { "prompt": "Determine whether text is a palindrome." },
+  { "prompt": "Create a URL-friendly slug." }
+]

@@ -1,0 +1,10 @@
+[
+  { "kind": "upper", "input": "The quick brown fox" },
+  { "kind": "lower", "input": "LARGE AND SMALL" },
+  { "kind": "reverse", "input": "stressed" },
+  { "kind": "word_count", "input": "alpha beta gamma delta" },
+  { "kind": "sum_numbers", "input": [1, 2, 3, 4, 5] },
+  { "kind": "max_number", "input": [-4, -1, -9] },
+  { "kind": "palindrome", "input": "A man, a plan, a canal: Panama" },
+  { "kind": "slugify", "input": "Self Improving Systems 2026" }
+]
