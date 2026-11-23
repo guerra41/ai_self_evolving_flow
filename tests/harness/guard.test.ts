@@ -35,6 +35,7 @@ describe('protected manifest', () => {
       await mkdir(join(root, 'tests'), { recursive: true });
       await mkdir(join(root, 'eval'), { recursive: true });
       await writeFile(join(root, 'tests', 'a.test.ts'), 'one');
+      await writeFile(join(root, 'tests', 'b.test.ts'), 'keep');
       await writeFile(join(root, 'eval', 'tasks.json'), '[]');
       const before = await protectedManifest(root);
 
@@ -42,9 +43,11 @@ describe('protected manifest', () => {
 
       await writeFile(join(root, 'tests', 'a.test.ts'), 'two');
       await writeFile(join(root, 'eval', 'extra.json'), '{}');
+      await rm(join(root, 'tests', 'b.test.ts'));
       expect(manifestChanges(before, await protectedManifest(root))).toEqual([
         'eval/extra.json',
         'tests/a.test.ts',
+        'tests/b.test.ts',
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -57,6 +60,23 @@ describe('isolation helpers', () => {
     process.env.OPENAI_API_KEY = 'secret-test-value';
     try {
       expect(JSON.stringify(allowlistedEnv())).not.toContain('secret-test-value');
+    } finally {
+      delete process.env.OPENAI_API_KEY;
+    }
+  });
+
+  it('child process does not inherit the API key (end-to-end)', async () => {
+    process.env.OPENAI_API_KEY = 'secret-test-value';
+    try {
+      const result = await runBounded(
+        process.execPath,
+        ['-e', 'process.stdout.write(String(process.env.OPENAI_API_KEY))'],
+        { cwd: tmpdir(), timeoutMs: 5000 },
+      );
+      // The child prints String(undefined) when the key is absent, so require exactly that.
+      expect(result.spawnError).toBeUndefined();
+      expect(result.code).toBe(0);
+      expect(result.stdout).toBe('undefined');
     } finally {
       delete process.env.OPENAI_API_KEY;
     }

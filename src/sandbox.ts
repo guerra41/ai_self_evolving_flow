@@ -25,6 +25,7 @@ export async function runInSandbox(
   taskJson: unknown,
   timeoutMs: number,
   memoryMb: number,
+  entryPoint = 'src/task-agent/TaskAgent.ts',
 ): Promise<SandboxResult> {
   if (!process.allowedNodeEnvironmentFlags.has('--permission')) {
     return { success: false, error: 'Node permission model unavailable; Node 22.3 or newer is required' };
@@ -36,7 +37,7 @@ export async function runInSandbox(
 
   try {
     await build({
-      entryPoints: [resolve('src/task-agent/TaskAgent.ts')],
+      entryPoints: [resolve(entryPoint)],
       outfile: bundlePath,
       bundle: true,
       platform: 'node',
