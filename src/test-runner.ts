@@ -16,8 +16,10 @@ export interface TestRunResult {
  *  - allowlisted environment (no API keys), hard timeout with SIGKILL, capped output
  * The real tests/ and eval/ are protected separately by the tamper check in guard.ts.
  */
-export async function runIsolatedTests(timeoutMs: number): Promise<TestRunResult> {
-  const root = process.cwd();
+export async function runIsolatedTests(
+  timeoutMs: number,
+  root = process.cwd(),
+): Promise<TestRunResult> {
   const copy = await mkdtemp(join(tmpdir(), 'ai-evolution-tests-'));
 
   try {
@@ -50,6 +52,7 @@ export async function runIsolatedTests(timeoutMs: number): Promise<TestRunResult
     // Remove the node_modules link itself (non-recursive) so cleanup can never follow it
     // into the real dependencies.
     await rmdir(join(copy, 'node_modules')).catch(() => undefined);
-    await rm(copy, { recursive: true, force: true });
+    // Cleanup problems (for example a file still being released) must not change the result.
+    await rm(copy, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => undefined);
   }
 }

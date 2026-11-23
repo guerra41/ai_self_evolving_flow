@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 export interface BoundedResult {
   code: number | null;
@@ -17,6 +17,26 @@ export interface BoundedOptions {
 }
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
+
+/**
+ * Kills the child AND everything it started. Killing only the direct child leaves
+ * grandchildren (for example vitest workers) running and holding files open.
+ */
+function killTree(child: ChildProcess): void {
+  if (child.pid === undefined) {
+    return;
+  }
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+      .on('error', () => child.kill('SIGKILL'));
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL'); // the child leads its own process group (detached)
+  } catch {
+    child.kill('SIGKILL');
+  }
+}
 
 /**
  * Environment handed to anything that runs LLM-generated code. Secrets such as
@@ -60,6 +80,7 @@ export function runBounded(
         env: options.env ?? allowlistedEnv(),
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
+        detached: process.platform !== 'win32',
       });
     } catch (error) {
       resolvePromise({ ...result, spawnError: error instanceof Error ? error.message : String(error) });
@@ -77,14 +98,14 @@ export function runBounded(
 
     const timer = setTimeout(() => {
       result.timedOut = true;
-      child.kill('SIGKILL');
+      killTree(child);
     }, options.timeoutMs);
 
     const collect = (stream: 'stdout' | 'stderr') => (chunk: string): void => {
       if (result.stdout.length + result.stderr.length >= maxOutput) {
         if (!result.outputExceeded) {
           result.outputExceeded = true;
-          child.kill('SIGKILL');
+          killTree(child);
         }
         return;
       }
