@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-
 export interface MetaResult {
   source: string;
   proposal: string;
@@ -12,7 +10,7 @@ export async function generateProposal(
 ): Promise<MetaResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return deterministicProposal(currentSource, pastScores);
+    throw new Error('OPENAI_API_KEY is not set; use the scripted offline MetaAgent instead');
   }
 
   const response = await fetch(`${process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'}/chat/completions`, {
@@ -56,24 +54,4 @@ export async function generateProposal(
   }
 
   return { source: match[1], proposal: 'OpenAI-compatible MetaAgent proposed a source rewrite' };
-}
-
-async function deterministicProposal(
-  currentSource: string,
-  pastScores: number[],
-): Promise<MetaResult> {
-  const source = await readFile('src/task-agent/TaskAgent.ts', 'utf8');
-  if (currentSource !== source) {
-    throw new Error('Unexpected source snapshot mismatch');
-  }
-
-  const proposals = [
-    'MetaAgent retained the implementation and recorded a no-op generation',
-    'MetaAgent requested a normalization hardening pass',
-  ];
-  const score = pastScores.at(-1) ?? 0;
-  return {
-    source,
-    proposal: proposals[score >= 100 ? 0 : 1],
-  };
 }

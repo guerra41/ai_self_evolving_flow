@@ -16,7 +16,11 @@ pnpm install
 Copy-Item .env.example .env
 ```
 
-Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI runs deterministic no-op generations.
+Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI runs a **scripted offline MetaAgent** (`src/scripted-meta-agent.ts`): a fixed list of five source patches that lets you watch the whole loop work with no network. It is a demo, not a learning agent: the script was written by hand against the seed's known weaknesses and never reads `eval/`. Two steps are deliberately bad so the guardrails fire (a forbidden import is rejected by the source screen; a change that breaks uppercasing fails the unit tests and is rolled back).
+
+Expected keyless output from a fresh checkout: baseline 63, then 75, rejected, 88, rolled back, 100.
+
+`pnpm evolve` edits `src/task-agent/TaskAgent.ts` in place and keeps accepted changes. To run the demo again from the seed, reset it: `git checkout -- src/task-agent/TaskAgent.ts`.
 
 ## Commands
 
