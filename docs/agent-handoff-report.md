@@ -172,3 +172,10 @@ Implemented after the review above:
 - **Bug found by the new tests:** isolated test runs failed on Windows when the project path used a lowercase drive letter (`d:` versus `D:`), because vitest loaded two copies of itself. Fixed by linking dependencies through their canonical path; a regression test covers it.
 - **Not done:** the real LLM MetaAgent path has still never run. Without `OPENAI_API_KEY` the offline MetaAgent makes no changes, so a keyless `pnpm evolve` stays at the baseline score. The full suite now takes about 80 seconds because each evolve test runs real isolated vitest processes.
 
+## 8. Update: key-free scripted MetaAgent (branch `feat/scripted-offline-meta-agent`)
+
+- Without `OPENAI_API_KEY`, `pnpm evolve` now uses `src/scripted-meta-agent.ts` instead of a no-op. It replays five hand-written patches: fix `max_number`, a forbidden `node:fs` import, fix palindromes, a change that breaks uppercasing, fix slugs. Result on the seed: 63 -> 75 -> rejected by the source screen -> 88 -> rolled back by the unit tests -> 100. Verified on the real project and in a test.
+- This is a demonstration of the loop and guardrails, **not evidence that an agent can self-improve**: the script encodes the answers. It never reads `eval/`, but its author knew the seed's weaknesses. The LLM path is still unrun.
+- `generateProposal` now throws when no key is set, instead of returning a silent no-op.
+- `pnpm evolve` mutates the committed seed in place; reset with `git checkout -- src/task-agent/TaskAgent.ts`. The tests use a pinned copy (`tests/harness/fixtures/seed-task-agent.ts.txt`) so they do not depend on the working tree.
+
