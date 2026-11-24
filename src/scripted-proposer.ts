@@ -1,13 +1,13 @@
-import type { MetaResult } from './meta-agent.js';
+import type { ProposalResult } from './proposer.js';
 
 /**
- * A key-free stand-in for the LLM MetaAgent, used when OPENAI_API_KEY is not set.
+ * A key-free stand-in for the LLM proposer, used when OPENAI_API_KEY is not set.
  *
  * It is NOT a learning agent. It replays a fixed script of source patches so the whole
  * loop (baseline, selection, source screen, test gate, rollback) can be seen working
  * without network access. It never reads eval/; the script was written by hand against
  * the known weaknesses of the seed TaskAgent, so it says nothing about how well a real
- * MetaAgent would do.
+ * Proposer would do.
  *
  * Two steps are deliberately bad, to show the guardrails firing:
  *  - step 2 adds a forbidden import  -> rejected by the source screen
@@ -50,17 +50,17 @@ export const SCRIPT: Step[] = [
 ];
 
 /** Returns a proposer that walks the script one step per call; later calls change nothing. */
-export function createScriptedProposer(): (currentSource: string) => Promise<MetaResult> {
+export function createScriptedProposer(): (currentSource: string) => Promise<ProposalResult> {
   let step = 0;
   return async (currentSource) => {
     const current = SCRIPT[step];
     step += 1;
     if (!current) {
-      return { source: currentSource, proposal: 'scripted offline MetaAgent (demo): script finished, no change' };
+      return { source: currentSource, proposal: 'scripted offline proposer (demo): script finished, no change' };
     }
     return {
       source: current.apply(currentSource),
-      proposal: `scripted offline MetaAgent (demo), step ${step}: ${current.description}`,
+      proposal: `scripted offline proposer (demo), step ${step}: ${current.description}`,
     };
   };
 }

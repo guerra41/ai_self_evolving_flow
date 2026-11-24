@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { evolve, type ArchiveRecord } from '../../src/evolve.js';
 import { screenSource } from '../../src/guard.js';
-import { createScriptedProposer, SCRIPT } from '../../src/scripted-meta-agent.js';
+import { createScriptedProposer, SCRIPT } from '../../src/scripted-proposer.js';
 
 // The loop below runs five real generations with isolated vitest processes.
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 30_000 });
@@ -16,7 +16,7 @@ const REAL_ROOT = resolve(__dirname, '..', '..');
 // copy of the starting TaskAgent instead of whatever the working tree currently holds.
 const SEED_PATH = join(REAL_ROOT, 'tests', 'harness', 'fixtures', 'seed-task-agent.ts.txt');
 
-describe('scripted offline MetaAgent: script', () => {
+describe('scripted offline proposer: script', () => {
   it('every patch that should change the seed actually matches it', async () => {
     const seed = await readFile(SEED_PATH, 'utf8');
     // Steps 1, 3 and 5 are fixes; a silent no-op would mean the script drifted from the seed.
@@ -49,7 +49,7 @@ describe('scripted offline MetaAgent: script', () => {
   });
 });
 
-describe('scripted offline MetaAgent: full loop on the real seed', () => {
+describe('scripted offline proposer: full loop on the real seed', () => {
   let root = '';
 
   beforeEach(async () => {
