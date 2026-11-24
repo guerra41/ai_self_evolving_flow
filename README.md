@@ -4,13 +4,13 @@ A minimal command-line experiment for studying self-evolving software. A `MetaAg
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.3+ (the sandbox uses Node's permission model)
 - pnpm
 - Optional: Docker or an OpenAI-compatible API
 
 ## Setup
 
-```powers
+```powershell
 corepack enable
 pnpm install
 Copy-Item .env.example .env
@@ -20,7 +20,7 @@ Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI r
 
 ## Commands
 
-```powers
+```powershell
 pnpm test
 pnpm evolve
 ```
@@ -37,6 +37,7 @@ Each attempt is appended to `outputs/archive.jsonl` as one JSON object containin
 - `score`
 - `timestamp`
 - `proposal`
+- plus, when relevant: `testError`, `evaluatorFailures`, `rejectedBy` (source screen), `tamperedPaths`
 
 Failed test attempts are rolled back and receive no scoring phase.
 
@@ -46,8 +47,11 @@ Failed test attempts are rolled back and receive no scoring phase.
 - MetaAgent can receive only training prompts, current source, and past scores.
 - `eval/tasks.json` and `eval/expected.json` remain outside the MetaAgent input.
 - MetaAgent is limited to writing `src/task-agent/TaskAgent.ts`.
-- Every proposal is written temporarily, then `pnpm test` runs. A failed test rolls it back.
-- Evaluation executes the bundled TaskAgent in a separate child process with timeout and memory limits. This is the minimum sandbox isolation. A Docker runner can be added for stronger OS/container isolation.
+- A proposal is first screened statically (`screenSource` in `src/guard.ts`: no imports, `process`, `eval`, network). Rejected code is never written or executed.
+- Accepted proposals are written temporarily and the TaskAgent tests (the `vitest run` behind `pnpm test`) run against a throw-away copy of the project with an allowlisted environment, a timeout and capped output, so generated code never runs in the real working tree. A failed test rolls the change back.
+- Scoring runs the bundled TaskAgent in a child process with an empty temp working directory, no API keys in its environment, Node's permission model (no writes, no child processes, reads limited to the temp dir), a SIGKILL timeout, a heap limit and capped output.
+- After each generation the SHA-256 of `tests/`, `eval/`, `training/`, the harness files in `src/` and the project config is compared with the start of the run. Any change rolls back the TaskAgent, records the generation with `tamperedPaths`, and aborts the run.
+- Known limit: Node's permission model does not restrict network access. Run under Docker with `--network none` for full isolation.
 
 ## Configuration
 
