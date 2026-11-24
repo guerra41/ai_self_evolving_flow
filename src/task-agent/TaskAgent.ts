@@ -21,16 +21,16 @@ export function solveTask(task: Task): string | number | boolean {
     case 'sum_numbers':
       return task.input.reduce((total, value) => total + value, 0);
     case 'max_number':
-      return task.input.length ? Math.max(...task.input) : 0;
+      return task.input.reduce((max, value) => (value > max ? value : max), 0);
     case 'palindrome': {
-      const normalized = task.input.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normalized = task.input.toLowerCase().replace(/\s+/g, '');
       return normalized === [...normalized].reverse().join('');
     }
     case 'slugify':
       return task.input
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/[^a-z]+/g, '-')
         .replace(/^-|-$/g, '');
   }
 }

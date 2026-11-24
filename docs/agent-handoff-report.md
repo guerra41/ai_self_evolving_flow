@@ -160,3 +160,15 @@ README notes: it is accurate about the child-process sandbox being the minimum a
 - Is "keep only if the score does not drop" the right selection rule, or should the archive keep a lineage of variants (as HyperAgents does)?
 - Is `CLAUDE.md` in `ai_self_evolving_flow` an accurate and sufficient statement of the guardrails?
 - Anything misunderstood in section 1, especially request 3, where the wrong repo was edited before the user corrected it?
+
+## 7. Update: fixes 3 and 4 (branch `feat/selection-run-archives-seed-headroom`)
+
+Implemented after the review above:
+
+- **Selection.** A generation is kept only if tests pass and its score is not below the best kept score (baseline included); otherwise the previous source is restored. `accepted`, `bestScore` and `rollbackReason` are archived.
+- **Baseline and run id.** Each run first tests and scores the starting TaskAgent as generation 0 and refuses to start if it fails its own tests. Every record carries a `runId`, so the shared archive no longer mixes runs.
+- **Real diff.** `src/diff.ts` produces a unified diff and ignores CRLF versus LF.
+- **Seed headroom.** The seed now scores 63/100 (negative maximums, palindromes with punctuation, digits in slugs) while passing all unit tests. `eval/` and the original tests were not touched; six edge-case tests were appended to `tests/task-agent.test.ts`.
+- **Bug found by the new tests:** isolated test runs failed on Windows when the project path used a lowercase drive letter (`d:` versus `D:`), because vitest loaded two copies of itself. Fixed by linking dependencies through their canonical path; a regression test covers it.
+- **Not done:** the real LLM MetaAgent path has still never run. Without `OPENAI_API_KEY` the offline MetaAgent makes no changes, so a keyless `pnpm evolve` stays at the baseline score. The full suite now takes about 80 seconds because each evolve test runs real isolated vitest processes.
+

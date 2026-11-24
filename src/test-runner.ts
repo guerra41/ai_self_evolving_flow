@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm, rmdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -29,7 +30,11 @@ export async function runIsolatedTests(
     await cp(join(root, 'src', 'task-agent'), join(copy, 'src', 'task-agent'), { recursive: true });
     await cp(join(root, 'package.json'), join(copy, 'package.json'));
     await cp(join(root, 'tsconfig.json'), join(copy, 'tsconfig.json'));
-    await symlink(resolve(root, 'node_modules'), join(copy, 'node_modules'), 'junction');
+    // Link the dependencies through their canonical real path. On Windows a differently
+    // cased drive letter (d: vs D:) makes vitest load two copies of itself, which fails
+    // with "failed to find the current suite".
+    const dependencies = realpathSync.native(resolve(root, 'node_modules'));
+    await symlink(dependencies, join(copy, 'node_modules'), 'junction');
 
     const result = await runBounded(
       process.execPath,

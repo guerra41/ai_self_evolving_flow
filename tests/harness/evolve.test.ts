@@ -1,13 +1,24 @@
 import { access, cp, mkdir, mkdtemp, readFile, rm, rmdir, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { evolve, type ArchiveRecord, type ProposeFn } from '../../src/evolve.js';
 import { runIsolatedTests } from '../../src/test-runner.js';
+
+// Each generation runs a real isolated vitest process (about 2 s), so multi-generation
+// tests need more than the 5 s default.
+vi.setConfig({ testTimeout: 90_000, hookTimeout: 30_000 });
 
 const GOOD_SOURCE = `export type Task = { kind: 'upper'; input: string };
 export function solveTask(task: Task): string {
   return task.input.toUpperCase();
+}
+`;
+
+// Passes the fixture's unit test ('abc' -> 'ABC') but fails the frozen eval ('frozen').
+const WEAK_SOURCE = `export type Task = { kind: 'upper'; input: string };
+export function solveTask(task: Task): string {
+  return task.input === 'abc' ? 'ABC' : task.input;
 }
 `;
 
@@ -31,6 +42,15 @@ async function exists(path: string): Promise<boolean> {
 async function readArchive(): Promise<ArchiveRecord[]> {
   const text = await readFile(join(root, 'outputs', 'archive.jsonl'), 'utf8').catch(() => '');
   return text.split('\n').filter(Boolean).map((line) => JSON.parse(line) as ArchiveRecord);
+}
+
+async function generationRecords(): Promise<ArchiveRecord[]> {
+  return (await readArchive()).filter((record) => record.generation > 0);
+}
+
+async function generationOne(): Promise<ArchiveRecord> {
+  const [record] = await generationRecords();
+  return record;
 }
 
 function options(propose: ProposeFn, generations = 1) {
@@ -80,6 +100,20 @@ describe('runIsolatedTests', () => {
     expect(await exists(join(REAL_ROOT, 'node_modules', 'vitest', 'package.json'))).toBe(true);
   });
 
+  it.skipIf(process.platform !== 'win32')(
+    'works when the project path uses a lowercase drive letter',
+    async () => {
+      // Regression: vitest loaded two copies of itself when dependencies were reached via
+      // d:\... but resolved as D:\..., and failed with "failed to find the current suite".
+      const lower = `${REAL_ROOT[0].toLowerCase()}${REAL_ROOT.slice(1)}`;
+      await rmdir(join(root, 'node_modules'));
+      await symlink(join(lower, 'node_modules'), join(root, 'node_modules'), 'junction');
+      const result = await runIsolatedTests(60_000, root);
+      expect(result.output).not.toContain('current suite');
+      expect(result.passed).toBe(true);
+    },
+  );
+
   it('does not run an infinite loop forever', async () => {
     await writeFile(
       join(root, 'src', 'task-agent', 'TaskAgent.ts'),
@@ -94,13 +128,26 @@ describe('runIsolatedTests', () => {
 describe('evolve', () => {
   it('records a passing generation with its score', async () => {
     await evolve(options(async (source) => ({ source, proposal: 'no change' })));
-    const [record] = await readArchive();
-    expect(record).toMatchObject({ generation: 1, testPass: true, score: 100 });
+    const record = await generationOne();
+    expect(record).toMatchObject({ generation: 1, testPass: true, score: 100, accepted: true });
+  });
+
+  it('archives a baseline as generation 0 before any proposal', async () => {
+    await evolve(options(async (source) => ({ source, proposal: 'no change' })));
+    const [baseline] = await readArchive();
+    expect(baseline).toMatchObject({ generation: 0, testPass: true, score: 100, accepted: true, proposal: 'baseline' });
+  });
+
+  it('refuses to start when the starting TaskAgent fails its own tests', async () => {
+    await writeFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), BROKEN_SOURCE);
+    await expect(evolve(options(async (source) => ({ source, proposal: 'x' })))).rejects.toThrow(
+      /starting TaskAgent fails its own tests/,
+    );
   });
 
   it('rolls back a proposal that fails the tests and skips scoring', async () => {
     await evolve(options(async () => ({ source: BROKEN_SOURCE, proposal: 'breaks uppercase' })));
-    const [record] = await readArchive();
+    const record = await generationOne();
     expect(record).toMatchObject({ generation: 1, testPass: false, score: null });
     expect(record.testError).toBeTruthy();
     expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
@@ -109,7 +156,7 @@ describe('evolve', () => {
   it('rejects a proposal that fails the source screen without writing it', async () => {
     const hostile = `import { readFileSync } from 'node:fs';\n${GOOD_SOURCE}`;
     await evolve(options(async () => ({ source: hostile, proposal: 'reads files' })));
-    const [record] = await readArchive();
+    const record = await generationOne();
     expect(record.testPass).toBe(false);
     expect(record.rejectedBy?.length).toBeGreaterThan(0);
     expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
@@ -124,7 +171,7 @@ describe('evolve', () => {
       }
       return { source, proposal: 'ok' };
     }, 2));
-    const records = await readArchive();
+    const records = await generationRecords();
     expect(records.map((r) => r.testPass)).toEqual([false, true]);
     expect(records[0].proposal).toContain('API returned 500');
   });
@@ -139,7 +186,7 @@ describe('evolve', () => {
       }, 3)),
     ).rejects.toThrow(/protected files changed \(tests\/task-agent\.test\.ts\)/);
 
-    const records = await readArchive();
+    const records = await generationRecords();
     expect(records).toHaveLength(1); // generations 2 and 3 never ran
     expect(records[0].tamperedPaths).toEqual(['tests/task-agent.test.ts']);
     expect(records[0].testPass).toBe(false);
@@ -153,5 +200,57 @@ describe('evolve', () => {
         return { source, proposal: 'edits the answers' };
       })),
     ).rejects.toThrow(/eval\/expected\.json/);
+  });
+
+  it('rolls back a proposal that passes the tests but lowers the score', async () => {
+    await evolve(options(async () => ({ source: WEAK_SOURCE, proposal: 'special-cases the unit test' })));
+    const record = await generationOne();
+    expect(record).toMatchObject({ testPass: true, score: 0, accepted: false, bestScore: 100 });
+    expect(record.rollbackReason).toContain('below the best score');
+    expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
+  });
+
+  it('keeps a proposal that improves on the baseline', async () => {
+    await writeFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), WEAK_SOURCE);
+    await evolve(options(async () => ({ source: GOOD_SOURCE, proposal: 'real fix' })));
+    const [baseline] = await readArchive();
+    const record = await generationOne();
+    expect(baseline.score).toBe(0);
+    expect(record).toMatchObject({ score: 100, accepted: true, bestScore: 100 });
+    expect(record.codeDiff).toContain('-  return task.input === ');
+    expect(record.codeDiff).toContain('+  return task.input.toUpperCase();');
+    expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
+  });
+
+  it('keeps a proposal that ties the best score', async () => {
+    await evolve(options(async (source) => ({ source: `${source}// tie
+`, proposal: 'comment only' })));
+    expect(await generationOne()).toMatchObject({ score: 100, accepted: true });
+  });
+
+  it('compares each generation with the best kept so far, not the previous attempt', async () => {
+    let calls = 0;
+    await evolve(options(async () => {
+      calls += 1;
+      // Generation 1 regresses (rolled back); generation 2 matches the baseline again.
+      return { source: calls === 1 ? WEAK_SOURCE : `${GOOD_SOURCE}// second
+`, proposal: `try ${calls}` };
+    }, 2));
+    const records = await generationRecords();
+    expect(records.map((r) => r.accepted)).toEqual([false, true]);
+    expect(records.map((r) => r.bestScore)).toEqual([100, 100]);
+  });
+
+  it('tags every record with the run id, and different runs get different ids', async () => {
+    await evolve({ ...options(async (source) => ({ source, proposal: 'a' })), runId: 'run-one' });
+    await evolve({ ...options(async (source) => ({ source, proposal: 'b' })), runId: 'run-two' });
+    const ids = (await readArchive()).map((r) => r.runId);
+    expect(new Set(ids)).toEqual(new Set(['run-one', 'run-two']));
+    expect(ids.filter((id) => id === 'run-one')).toHaveLength(2); // baseline + generation 1
+  });
+
+  it('generates a run id when none is given', async () => {
+    await evolve(options(async (source) => ({ source, proposal: 'a' })));
+    expect((await readArchive())[0].runId).toMatch(/^\d{8}T\d{6}Z-[0-9a-f]{4}$/);
   });
 });

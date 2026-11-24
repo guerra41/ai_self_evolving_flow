@@ -34,3 +34,31 @@ describe('TaskAgent', () => {
     expect(solveTask({ kind: 'slugify', input: '  Hello, New World!  ' })).toBe('hello-new-world');
   });
 });
+
+describe('TaskAgent edge cases', () => {
+  it('handles empty text', () => {
+    expect(solveTask({ kind: 'upper', input: '' })).toBe('');
+    expect(solveTask({ kind: 'lower', input: '' })).toBe('');
+    expect(solveTask({ kind: 'reverse', input: '' })).toBe('');
+  });
+
+  it('counts zero words in blank text', () => {
+    expect(solveTask({ kind: 'word_count', input: '   ' })).toBe(0);
+  });
+
+  it('sums an empty array to zero', () => {
+    expect(solveTask({ kind: 'sum_numbers', input: [] })).toBe(0);
+  });
+
+  it('returns zero as the maximum of an empty array', () => {
+    expect(solveTask({ kind: 'max_number', input: [] })).toBe(0);
+  });
+
+  it('rejects text that is not a palindrome', () => {
+    expect(solveTask({ kind: 'palindrome', input: 'hello world' })).toBe(false);
+  });
+
+  it('collapses repeated separators in slugs', () => {
+    expect(solveTask({ kind: 'slugify', input: 'a  --  b' })).toBe('a-b');
+  });
+});
