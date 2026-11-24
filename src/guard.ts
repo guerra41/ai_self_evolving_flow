@@ -3,11 +3,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, posix, relative, sep } from 'node:path';
 
 /**
- * Files the MetaAgent must never change. Everything under src/task-agent/ is the
+ * Files the proposer must never change. Everything under src/task-agent/ is the
  * only thing it may edit, so it is deliberately not listed here.
  */
 const PROTECTED_DIRECTORIES = ['tests', 'eval', 'training'];
-const PROTECTED_SRC_FILES = ['cli.ts', 'evaluator.ts', 'sandbox.ts', 'meta-agent.ts', 'isolation.ts', 'guard.ts', 'test-runner.ts', 'evolve.ts', 'diff.ts', 'scripted-meta-agent.ts'];
+const PROTECTED_SRC_FILES = ['cli.ts', 'evaluator.ts', 'sandbox.ts', 'proposer.ts', 'isolation.ts', 'guard.ts', 'test-runner.ts', 'evolve.ts', 'diff.ts', 'scripted-proposer.ts'];
 const PROTECTED_ROOT_FILES = ['package.json', 'pnpm-lock.yaml', 'tsconfig.json'];
 
 export type Manifest = Record<string, string>;

@@ -162,7 +162,7 @@ describe('evolve', () => {
     expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
   });
 
-  it('records a failed MetaAgent call and keeps going', async () => {
+  it('records a failed proposer call and keeps going', async () => {
     let calls = 0;
     await evolve(options(async (source) => {
       calls += 1;

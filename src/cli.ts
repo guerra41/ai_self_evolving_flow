@@ -1,13 +1,13 @@
 import 'dotenv/config';
 import { evolve } from './evolve.js';
-import { generateProposal } from './meta-agent.js';
-import { createScriptedProposer } from './scripted-meta-agent.js';
+import { generateProposal } from './proposer.js';
+import { createScriptedProposer } from './scripted-proposer.js';
 
 const usingLlm = Boolean(process.env.OPENAI_API_KEY);
 console.log(
   usingLlm
-    ? 'MetaAgent: OpenAI-compatible API'
-    : 'MetaAgent: scripted offline demo (set OPENAI_API_KEY in .env to use an LLM)',
+    ? 'Proposer: LLM through an OpenAI-compatible API'
+    : 'Proposer: scripted offline demo (set OPENAI_API_KEY in .env to use an LLM)',
 );
 
 evolve({

@@ -16,7 +16,7 @@ Two repositories were involved:
 | 3 | "Include as a core value of this project that it is meant to validate locally the self-evolving capabilities of multiple agents working together; there are no plans to put it live." | **Misunderstood.** The agent applied this to `startupbay` (the working directory) without asking which repo was meant. It edited `CLAUDE.md`, `.github/copilot-instructions.md` and saved a memory. |
 | 4 | "That was only meant for ai_self_evolving_flow; roll back." | Rolled back the two edited files with `git checkout` and deleted the memory. The merged PR was not touched. |
 | 5 | "Add it to ai_self_evolving_flow's `CLAUDE.md`" and "I want a memory for it." | Created that repo's `CLAUDE.md` (it did not exist) and a memory entry. |
-| 6 | User pasted the real project prompt (a MetaAgent/TaskAgent CLI) and asked the agent to understand the goal. | The agent conceded the earlier wording ("multiple agents working together, no live deploy") did not match the real goal. |
+| 6 | User pasted the real project prompt (a proposer/TaskAgent CLI) and asked the agent to understand the goal. | The agent conceded the earlier wording ("multiple agents working together, no live deploy") did not match the real goal. |
 | 7 | "Rewrite it. Skip the no-plans-to-go-live rule." | `CLAUDE.md` and memory rewritten around the actual project goal and guardrails. |
 | 8 | "Audit the existing code against the guardrails." | Read-only audit; findings in section 5. Nothing was changed. |
 | 9 | "Create an md file with your understanding, a report of files created, and the project file structure." | This file. |
@@ -25,13 +25,13 @@ Open decision from the user: whether to fix the audit findings. The agent propos
 
 ## 2. The project goal (as understood from the pasted prompt)
 
-`ai_self_evolving_flow` is a command-line experiment to demonstrate and study self-evolving software, modeled on HyperAgents (TypeScript). A **MetaAgent** reads evaluation scores and rewrites the **TaskAgent's** source; the TaskAgent is then re-evaluated. `pnpm evolve` runs at least 3 generations (default 5) and records each in `outputs/archive.jsonl`. Stack: Node.js, TypeScript, vitest, an OpenAI-compatible API via `.env`, Docker for sandboxing. No web UI, no database.
+`ai_self_evolving_flow` is a command-line experiment to demonstrate and study self-evolving software, modeled on HyperAgents (TypeScript). A **Proposer** reads evaluation scores and rewrites the **TaskAgent's** source; the TaskAgent is then re-evaluated. `pnpm evolve` runs at least 3 generations (default 5) and records each in `outputs/archive.jsonl`. Stack: Node.js, TypeScript, vitest, an OpenAI-compatible API via `.env`, Docker for sandboxing. No web UI, no database.
 
 Guardrails stated by the user:
 
-1. **TDD gate.** Hand-written tests in `tests/task-agent.test.ts`. The MetaAgent may modify only `src/task-agent/`, never tests, harness or evaluator. After each modification `pnpm test` runs; failure means rollback and a recorded failed generation; only passing changes reach scoring.
-2. **Sandbox.** MetaAgent-generated code runs in Docker (at minimum a separate child process) with timeout (about 30 s) and memory limits, never in the host process.
-3. **Frozen evaluation set.** `eval/tasks.json` is invisible to the MetaAgent, which sees only training prompts and past scores.
+1. **TDD gate.** Hand-written tests in `tests/task-agent.test.ts`. The proposer may modify only `src/task-agent/`, never tests, harness or evaluator. After each modification `pnpm test` runs; failure means rollback and a recorded failed generation; only passing changes reach scoring.
+2. **Sandbox.** Proposer-generated code runs in Docker (at minimum a separate child process) with timeout (about 30 s) and memory limits, never in the host process.
+3. **Frozen evaluation set.** `eval/tasks.json` is invisible to the proposer, which sees only training prompts and past scores.
 4. **Archive.** JSONL, one object per generation: generation number, code diff, test pass/fail, score, timestamp.
 
 Deliverables: `pnpm evolve`, `pnpm test`, `outputs/archive.jsonl`, and a `README.md` (how to run, add task domains, adjust guardrails).
@@ -86,11 +86,11 @@ ai_self_evolving_flow/
 │   └── agent-handoff-report.md   # this file
 ├── src/
 │   ├── cli.ts                 # evolution loop: proposal, write, pnpm test, rollback or evaluate, archive
-│   ├── meta-agent.ts          # LLM call, or deterministic no-op fallback without an API key
+│   ├── proposer.ts          # LLM call, or deterministic no-op fallback without an API key
 │   ├── sandbox.ts             # esbuild bundle + child-process runner (timeout, heap limit)
 │   ├── evaluator.ts           # scores TaskAgent on eval/ via the sandbox
 │   └── task-agent/
-│       ├── TaskAgent.ts       # the code the MetaAgent rewrites (8 task kinds)
+│       ├── TaskAgent.ts       # the code the proposer rewrites (8 task kinds)
 │       └── index.ts
 ├── tests/
 │   └── task-agent.test.ts     # 8 happy-path unit tests
@@ -98,7 +98,7 @@ ai_self_evolving_flow/
 │   ├── tasks.json
 │   └── expected.json
 ├── training/
-│   └── tasks.json             # prompts only; the MetaAgent may see these
+│   └── tasks.json             # prompts only; the proposer may see these
 └── outputs/
     └── archive.jsonl          # evolution record (gitignored)
 ```
@@ -129,7 +129,7 @@ README notes: it is accurate about the child-process sandbox being the minimum a
 ### What holds up
 - Only `src/task-agent/TaskAgent.ts` is ever written by the loop.
 - `pnpm test` runs after each proposal; failure restores the previous source and logs `testPass: false`.
-- The MetaAgent prompt contains only current source, training prompts and past scores. `eval/` is read only by the evaluator.
+- The proposer prompt contains only current source, training prompts and past scores. `eval/` is read only by the evaluator.
 - Archive is JSONL with the required fields; generations, timeout and memory are configurable through `.env`; no UI, no database.
 
 ### Guardrail breaches
@@ -138,7 +138,7 @@ README notes: it is accurate about the child-process sandbox being the minimum a
 3. **No tamper detection.** Nothing verifies `tests/`, `eval/` and the evaluator are unchanged after a generation.
 
 ### Why no evolution is observable
-4. The seed TaskAgent already scores 100, and without `OPENAI_API_KEY` the MetaAgent fallback returns the same source; the archive shows no-op generations at 100.
+4. The seed TaskAgent already scores 100, and without `OPENAI_API_KEY` the proposer fallback returns the same source; the archive shows no-op generations at 100.
 5. No selection: any test-passing change is kept even if the score drops. `pastScores` resets and generation numbers restart each run, while the source persists and `archive.jsonl` is appended to, so runs mix.
 
 ### Smaller issues
@@ -156,7 +156,7 @@ README notes: it is accurate about the child-process sandbox being the minimum a
 ## 6. Questions the reviewing agent might weigh in on
 
 - Is a child process with an allowlisted environment and Node's permission model enough isolation, or should Docker be required?
-- Should tamper detection hash files, or should the MetaAgent run with read-only mounts instead?
+- Should tamper detection hash files, or should the proposer run with read-only mounts instead?
 - Is "keep only if the score does not drop" the right selection rule, or should the archive keep a lineage of variants (as HyperAgents does)?
 - Is `CLAUDE.md` in `ai_self_evolving_flow` an accurate and sufficient statement of the guardrails?
 - Anything misunderstood in section 1, especially request 3, where the wrong repo was edited before the user corrected it?
@@ -170,12 +170,17 @@ Implemented after the review above:
 - **Real diff.** `src/diff.ts` produces a unified diff and ignores CRLF versus LF.
 - **Seed headroom.** The seed now scores 63/100 (negative maximums, palindromes with punctuation, digits in slugs) while passing all unit tests. `eval/` and the original tests were not touched; six edge-case tests were appended to `tests/task-agent.test.ts`.
 - **Bug found by the new tests:** isolated test runs failed on Windows when the project path used a lowercase drive letter (`d:` versus `D:`), because vitest loaded two copies of itself. Fixed by linking dependencies through their canonical path; a regression test covers it.
-- **Not done:** the real LLM MetaAgent path has still never run. Without `OPENAI_API_KEY` the offline MetaAgent makes no changes, so a keyless `pnpm evolve` stays at the baseline score. The full suite now takes about 80 seconds because each evolve test runs real isolated vitest processes.
+- **Not done:** the real LLM proposer path has still never run. Without `OPENAI_API_KEY` the offline proposer makes no changes, so a keyless `pnpm evolve` stays at the baseline score. The full suite now takes about 80 seconds because each evolve test runs real isolated vitest processes.
 
-## 8. Update: key-free scripted MetaAgent (branch `feat/scripted-offline-meta-agent`)
+## 8. Update: key-free scripted Proposer (branch `feat/scripted-offline-proposer`)
 
-- Without `OPENAI_API_KEY`, `pnpm evolve` now uses `src/scripted-meta-agent.ts` instead of a no-op. It replays five hand-written patches: fix `max_number`, a forbidden `node:fs` import, fix palindromes, a change that breaks uppercasing, fix slugs. Result on the seed: 63 -> 75 -> rejected by the source screen -> 88 -> rolled back by the unit tests -> 100. Verified on the real project and in a test.
+- Without `OPENAI_API_KEY`, `pnpm evolve` now uses `src/scripted-proposer.ts` instead of a no-op. It replays five hand-written patches: fix `max_number`, a forbidden `node:fs` import, fix palindromes, a change that breaks uppercasing, fix slugs. Result on the seed: 63 -> 75 -> rejected by the source screen -> 88 -> rolled back by the unit tests -> 100. Verified on the real project and in a test.
 - This is a demonstration of the loop and guardrails, **not evidence that an agent can self-improve**: the script encodes the answers. It never reads `eval/`, but its author knew the seed's weaknesses. The LLM path is still unrun.
 - `generateProposal` now throws when no key is set, instead of returning a silent no-op.
 - `pnpm evolve` mutates the committed seed in place; reset with `git checkout -- src/task-agent/TaskAgent.ts`. The tests use a pinned copy (`tests/harness/fixtures/seed-task-agent.ts.txt`) so they do not depend on the working tree.
+
+
+## 9. Update: MetaAgent renamed to Proposer
+
+The user pointed out that a TypeScript file is not an agent. `src/meta-agent.ts` is a thin wrapper: one prompt in, one code block out, no tools or planning. It was renamed to **Proposer** throughout code and docs (`src/proposer.ts`, `src/scripted-proposer.ts`, `tests/harness/scripted-proposer.test.ts`, the protected-file list in `src/guard.ts`). Sections 1 to 8 above were renamed in place, so they say "Proposer" even where the user's original wording said "MetaAgent". The original brief and the HyperAgents design still use "MetaAgent".
 

@@ -1,6 +1,6 @@
 # AI Self-Evolving Flow
 
-A minimal command-line experiment for studying self-evolving software. A `MetaAgent` proposes rewrites of `TaskAgent`; after unit tests pass, frozen evaluation tasks score the result.
+A minimal command-line experiment for studying self-evolving software. A `Proposer` (a thin wrapper that asks an LLM for a new version of the code; called the "MetaAgent" in the original brief) proposes rewrites of `TaskAgent`; after unit tests pass, frozen evaluation tasks score the result.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ pnpm install
 Copy-Item .env.example .env
 ```
 
-Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI runs a **scripted offline MetaAgent** (`src/scripted-meta-agent.ts`): a fixed list of five source patches that lets you watch the whole loop work with no network. It is a demo, not a learning agent: the script was written by hand against the seed's known weaknesses and never reads `eval/`. Two steps are deliberately bad so the guardrails fire (a forbidden import is rejected by the source screen; a change that breaks uppercasing fails the unit tests and is rolled back).
+Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI runs a **scripted offline proposer** (`src/scripted-proposer.ts`): a fixed list of five source patches that lets you watch the whole loop work with no network. It is a demo, not a learning agent: the script was written by hand against the seed's known weaknesses and never reads `eval/`. Two steps are deliberately bad so the guardrails fire (a forbidden import is rejected by the source screen; a change that breaks uppercasing fails the unit tests and is rolled back).
 
 Expected keyless output from a fresh checkout: baseline 63, then 75, rejected, 88, rolled back, 100.
 
@@ -54,14 +54,14 @@ A generation is kept only if it passes the tests and its score is not lower than
 
 ## The starting TaskAgent
 
-The seed is deliberately imperfect so there is something to improve. It passes every unit test but scores 63/100 on the frozen evaluation set: `max_number` ignores negative arrays, `palindrome` does not strip punctuation, and `slugify` drops digits. The MetaAgent is never told this; it sees only the training prompts and past scores.
+The seed is deliberately imperfect so there is something to improve. It passes every unit test but scores 63/100 on the frozen evaluation set: `max_number` ignores negative arrays, `palindrome` does not strip punctuation, and `slugify` drops digits. The proposer is never told this; it sees only the training prompts and past scores.
 
 ## Guardrails
 
 - TDD tests are hand-authored in `tests/task-agent.test.ts`.
-- MetaAgent can receive only training prompts, current source, and past scores.
-- `eval/tasks.json` and `eval/expected.json` remain outside the MetaAgent input.
-- MetaAgent is limited to writing `src/task-agent/TaskAgent.ts`.
+- Proposer can receive only training prompts, current source, and past scores.
+- `eval/tasks.json` and `eval/expected.json` remain outside the proposer input.
+- Proposer is limited to writing `src/task-agent/TaskAgent.ts`.
 - A proposal is first screened statically (`screenSource` in `src/guard.ts`: no imports, `process`, `eval`, network). Rejected code is never written or executed.
 - Accepted proposals are written temporarily and the TaskAgent tests (the `vitest run` behind `pnpm test`) run against a throw-away copy of the project with an allowlisted environment, a timeout and capped output, so generated code never runs in the real working tree. A failed test rolls the change back.
 - Scoring runs the bundled TaskAgent in a child process with an empty temp working directory, no API keys in its environment, Node's permission model (no writes, no child processes, reads limited to the temp dir), a SIGKILL timeout, a heap limit and capped output.

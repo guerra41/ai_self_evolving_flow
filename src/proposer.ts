@@ -1,4 +1,4 @@
-export interface MetaResult {
+export interface ProposalResult {
   source: string;
   proposal: string;
 }
@@ -7,10 +7,10 @@ export async function generateProposal(
   currentSource: string,
   trainingPrompts: string[],
   pastScores: number[],
-): Promise<MetaResult> {
+): Promise<ProposalResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not set; use the scripted offline MetaAgent instead');
+    throw new Error('OPENAI_API_KEY is not set; use the scripted offline proposer instead');
   }
 
   const response = await fetch(`${process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'}/chat/completions`, {
@@ -50,8 +50,8 @@ export async function generateProposal(
   const content = payload.choices?.[0]?.message?.content ?? '';
   const match = content.match(/```(?:typescript|ts)?\s*\n([\s\S]*?)\n```/i);
   if (!match) {
-    throw new Error('MetaAgent response did not contain a TypeScript code block');
+    throw new Error('The proposer response did not contain a TypeScript code block');
   }
 
-  return { source: match[1], proposal: 'OpenAI-compatible MetaAgent proposed a source rewrite' };
+  return { source: match[1], proposal: 'OpenAI-compatible proposer proposed a source rewrite' };
 }

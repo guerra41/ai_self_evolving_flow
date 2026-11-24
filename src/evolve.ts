@@ -30,7 +30,7 @@ export interface EvolveOptions {
 
 /**
  * One line of outputs/archive.jsonl. Generation 0 is the baseline: the TaskAgent as it
- * was when the run started, tested and scored before any MetaAgent change.
+ * was when the run started, tested and scored before any proposer change.
  */
 export interface ArchiveRecord {
   runId: string;
@@ -147,15 +147,15 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     } catch (error) {
       await archive({
         generation,
-        codeDiff: '--- MetaAgent proposal failed ---',
+        codeDiff: '--- proposal failed ---',
         testPass: false,
         score: null,
         accepted: false,
         bestScore,
         proposal: error instanceof Error ? error.message : String(error),
       });
-      log(`Generation ${generation}: MetaAgent failed`);
-      await checkTamper(generation, bestSource, bestSource, 'MetaAgent proposal failed', bestScore);
+      log(`Generation ${generation}: proposer call failed`);
+      await checkTamper(generation, bestSource, bestSource, 'proposal failed', bestScore);
       continue;
     }
 

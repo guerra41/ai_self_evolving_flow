@@ -108,14 +108,14 @@
   <p>Think of a student, a tutor, a rulebook and a final exam.</p>
 
   <figure>
-    <svg viewBox="0 0 920 440" role="img" aria-label="Diagram of the four roles: the MetaAgent rewrites the TaskAgent; the unit tests check it; a hidden exam scores it; only the score goes back to the MetaAgent.">
+    <svg viewBox="0 0 920 440" role="img" aria-label="Diagram of the four roles: the proposer rewrites the TaskAgent; the unit tests check it; a hidden exam scores it; only the score goes back to the proposer.">
       <defs>
         <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1c2530"/></marker>
         <marker id="a1g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#17794a"/></marker>
       </defs>
-      <!-- MetaAgent -->
+      <!-- Proposer -->
       <rect x="30" y="150" width="220" height="120" rx="14" fill="#e8f0fc" stroke="#1f5fbf" stroke-width="2"/>
-      <text x="140" y="188" text-anchor="middle" font-size="19" font-weight="700" fill="#1f5fbf">MetaAgent</text>
+      <text x="140" y="188" text-anchor="middle" font-size="19" font-weight="700" fill="#1f5fbf">Proposer</text>
       <text x="140" y="212" text-anchor="middle" font-size="14" fill="#1c2530">the tutor</text>
       <text x="140" y="236" text-anchor="middle" font-size="13" fill="#5b6672">An AI that proposes</text>
       <text x="140" y="254" text-anchor="middle" font-size="13" fill="#5b6672">new versions of the code</text>
@@ -219,7 +219,7 @@
       <line x1="640" y1="55" x2="688" y2="55" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
 
       <rect class="st" x="300" y="125" width="340" height="70" rx="12"/>
-      <text class="h" x="470" y="155" text-anchor="middle">1 &middot; MetaAgent proposes new code</text>
+      <text class="h" x="470" y="155" text-anchor="middle">1 &middot; Proposer suggests new code</text>
       <text class="s" x="470" y="177" text-anchor="middle">Sees: current code, practice prompts, past scores</text>
       <line x1="470" y1="195" x2="470" y2="229" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
       <rect class="ex2" x="690" y="125" width="220" height="70" rx="10"/>
@@ -291,7 +291,7 @@
 
   <h3>Who can see and touch what</h3>
   <table>
-    <thead><tr><th>Thing</th><th>MetaAgent can <strong>see</strong> it</th><th>MetaAgent can <strong>change</strong> it</th><th>AI-written code can reach it while running</th></tr></thead>
+    <thead><tr><th>Thing</th><th>Proposer can <strong>see</strong> it</th><th>Proposer can <strong>change</strong> it</th><th>AI-written code can reach it while running</th></tr></thead>
     <tbody>
       <tr><td>The TaskAgent code file</td><td class="yes">Yes</td><td class="yes">Yes (the only thing)</td><td class="yes">It is the code</td></tr>
       <tr><td>Practice prompts (<code>training/</code>)</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
@@ -308,7 +308,7 @@
 <!-- ============================================================ 4 -->
 <section id="run">
   <h2><span class="num">4</span>A real run, generation by generation</h2>
-  <p class="lead">This is the actual output of <code>pnpm evolve</code> on the project with no API key, using the built-in scripted demo MetaAgent.</p>
+  <p class="lead">This is the actual output of <code>pnpm evolve</code> on the project with no API key, using the built-in scripted demo Proposer.</p>
 
   <figure>
     <svg viewBox="0 0 920 470" role="img" aria-label="Bar chart of the score in each generation: 63, 75, rejected, 88, rolled back, 100.">
@@ -493,7 +493,7 @@
       <text class="tl" x="240" y="82" text-anchor="end">task-agent.test.ts</text><rect x="250" y="64" width="280" height="30" rx="5" fill="#17794a"/><text class="tn" x="262" y="85">14</text><text class="tc" x="540" y="85">the eight jobs and their edge cases</text>
       <text class="tl" x="240" y="126" text-anchor="end">guard.test.ts</text><rect x="250" y="108" width="260" height="30" rx="5" fill="#9a5b00"/><text class="tn" x="262" y="129">13</text><text class="tc" x="520" y="129">source screen, fingerprints, key hiding, timeouts</text>
       <text class="tl" x="240" y="170" text-anchor="end">diff.test.ts</text><rect x="250" y="152" width="140" height="30" rx="5" fill="#5b6672"/><text class="tn" x="262" y="173">7</text><text class="tc" x="400" y="173">the &ldquo;what changed&rdquo; view</text>
-      <text class="tl" x="240" y="214" text-anchor="end">scripted-meta-agent.test.ts</text><rect x="250" y="196" width="100" height="30" rx="5" fill="#1f5fbf"/><text class="tn" x="262" y="217">5</text><text class="tc" x="360" y="217">full five-generation demo run</text>
+      <text class="tl" x="240" y="214" text-anchor="end">scripted-proposer.test.ts</text><rect x="250" y="196" width="100" height="30" rx="5" fill="#1f5fbf"/><text class="tn" x="262" y="217">5</text><text class="tc" x="360" y="217">full five-generation demo run</text>
       <text class="tl" x="240" y="258" text-anchor="end">sandbox.test.ts</text><rect x="250" y="240" width="60" height="30" rx="5" fill="#b3261e"/><text class="tn" x="262" y="261">3</text><text class="tc" x="320" y="261">hostile code vs the locked sandbox</text>
       <text class="tc" x="250" y="304">Total: 61 tests, all passing. Slow tests run real isolated processes on purpose.</text>
     </svg>
@@ -510,7 +510,7 @@
 
   <h3>Hands-on checks beyond the automated tests</h3>
   <ul>
-    <li><code>pnpm evolve</code> run on the real project with the scripted MetaAgent: baseline 63, then 75, rejected, 88, rolled back, 100.</li>
+    <li><code>pnpm evolve</code> run on the real project with the scripted Proposer: baseline 63, then 75, rejected, 88, rolled back, 100.</li>
     <li>A run where a deliberately broken generation was rolled back and a later good one was kept.</li>
     <li>Checks after each run that the real dependencies were not deleted by clean-up and that no stray processes were left.</li>
     <li>A browser check is not applicable: there is no web interface by design.</li>
@@ -581,7 +581,7 @@
       <tr><td><code>training/</code></td><td>Practice prompts the AI may see</td><td class="no">No</td></tr>
       <tr><td><code>src/evolve.ts</code>, <code>cli.ts</code></td><td>The loop and its command-line entry</td><td class="no">No</td></tr>
       <tr><td><code>src/guard.ts</code>, <code>isolation.ts</code>, <code>sandbox.ts</code>, <code>test-runner.ts</code></td><td>Source screen, fingerprints, process limits, locked sandbox, isolated tests</td><td class="no">No</td></tr>
-      <tr><td><code>src/meta-agent.ts</code>, <code>scripted-meta-agent.ts</code></td><td>The AI client and the key-free demo stand-in</td><td class="no">No</td></tr>
+      <tr><td><code>src/proposer.ts</code>, <code>scripted-proposer.ts</code></td><td>The AI client and the key-free demo stand-in</td><td class="no">No</td></tr>
       <tr><td><code>src/diff.ts</code>, <code>evaluator.ts</code></td><td>&ldquo;What changed&rdquo; view and the grader</td><td class="no">No</td></tr>
       <tr><td><code>outputs/archive.jsonl</code></td><td>The permanent record</td><td>Written by the loop only</td></tr>
     </tbody>
@@ -600,7 +600,8 @@
   <dl>
     <dt>Generation</dt><dd>One pass of the loop: propose, check, grade, keep or undo. Generation 0 is the starting code.</dd>
     <dt>Baseline</dt><dd>The score of the starting code. Every later version must at least match the best score so far.</dd>
-    <dt>MetaAgent / TaskAgent</dt><dd>The AI that edits code / the code being edited.</dd>
+    <dt>Proposer</dt><dd>The small piece of our own code that asks an LLM to suggest a new version of the code, and hands the answer to the loop. The LLM does the thinking; the Proposer is a thin wrapper around it (about 60 lines). It makes one request per generation and has no tools or planning of its own. The original brief called it the &ldquo;MetaAgent&rdquo;; we renamed it because it is closer to a request-and-extract step than to an agent.</dd>
+    <dt>TaskAgent</dt><dd>The code being improved: one plain function that solves the eight jobs.</dd>
     <dt>Frozen exam (eval set)</dt><dd>A fixed set of graded tasks the AI is never shown, so a good score cannot come from memorizing it.</dd>
     <dt>Roll back</dt><dd>Restore the previous best code after a rejected attempt.</dd>
     <dt>Sandbox</dt><dd>A locked room for running untrusted code: it can compute, but cannot reach the rest of the computer.</dd>
@@ -617,7 +618,11 @@
     <tbody>
       <tr><td>Isolation and tamper detection</td><td class="yes">Merged (PR #1)</td></tr>
       <tr><td>Selection, baseline, run ids, real diff, seed with room to improve</td><td class="yes">Merged (PR #2)</td></tr>
+<<<<<<< HEAD
       <tr><td>Key-free scripted MetaAgent and this overview page</td><td class="yes">Merged (PR #3)</td></tr>
+=======
+      <tr><td>Key-free scripted proposer and this overview page</td><td class="yes">Merged (PR #3)</td></tr>
+>>>>>>> 7514f11 (refactor: rename MetaAgent to Proposer in code and docs)
       <tr><td>First run with a real AI model</td><td class="no">Not done</td></tr>
     </tbody>
   </table>
