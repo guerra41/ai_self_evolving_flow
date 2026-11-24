@@ -29,17 +29,28 @@ pnpm evolve
 
 ## Generated archive
 
-Each attempt is appended to `outputs/archive.jsonl` as one JSON object containing:
+Each attempt is appended to `outputs/archive.jsonl` as one JSON object. The file is shared by all runs; `runId` tells them apart. Generation `0` is the baseline: the starting TaskAgent, tested and scored before any change. Fields:
 
+- `runId`
 - `generation`
-- `codeDiff`
+- `codeDiff` (a unified diff; line-ending differences are ignored)
 - `testPass`
 - `score`
+- `accepted` (whether the source after this generation is the one that was kept)
+- `bestScore` (best kept score so far)
 - `timestamp`
 - `proposal`
-- plus, when relevant: `testError`, `evaluatorFailures`, `rejectedBy` (source screen), `tamperedPaths`
+- plus, when relevant: `testError`, `evaluatorFailures`, `rejectedBy` (source screen), `tamperedPaths`, `rollbackReason`
 
 Failed test attempts are rolled back and receive no scoring phase.
+
+## Selection
+
+A generation is kept only if it passes the tests and its score is not lower than the best kept score so far (the baseline counts). A lower score restores the previous source and is recorded with `accepted: false` and a `rollbackReason`. If the starting TaskAgent fails its own tests, the run refuses to start.
+
+## The starting TaskAgent
+
+The seed is deliberately imperfect so there is something to improve. It passes every unit test but scores 63/100 on the frozen evaluation set: `max_number` ignores negative arrays, `palindrome` does not strip punctuation, and `slugify` drops digits. The MetaAgent is never told this; it sees only the training prompts and past scores.
 
 ## Guardrails
 
