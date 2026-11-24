@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Self-Evolving Flow: objective, problem, guardrails and test plan</title>
+<style>
+  :root {
+    --ink: #1c2530; --muted: #5b6672; --line: #dfe4ea; --soft: #f5f7fa; --bg: #ffffff;
+    --blue: #1f5fbf; --blue-soft: #e8f0fc;
+    --green: #17794a; --green-soft: #e6f5ec;
+    --amber: #9a5b00; --amber-soft: #fff4de;
+    --red: #b3261e; --red-soft: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; color: var(--ink); background: var(--bg); font: 16px/1.7 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header.hero { background: linear-gradient(135deg, #12306b, #1f5fbf); color: #fff; padding: 56px 24px 48px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+  header.hero .wrap { padding: 0; }
+  header.hero h1 { margin: 0 0 12px; font-size: 2.3rem; line-height: 1.2; }
+  header.hero p { margin: 0; max-width: 760px; font-size: 1.15rem; opacity: .95; }
+  .meta { margin-top: 18px; font-size: .9rem; opacity: .8; }
+  nav.toc { position: sticky; top: 0; z-index: 5; background: #fff; border-bottom: 1px solid var(--line); }
+  nav.toc .wrap { display: flex; gap: 6px 18px; flex-wrap: wrap; padding: 10px 24px; font-size: .9rem; }
+  nav.toc a { color: var(--blue); text-decoration: none; white-space: nowrap; }
+  nav.toc a:hover { text-decoration: underline; }
+  main { padding: 24px 0 80px; }
+  section { padding-top: 40px; }
+  h2 { font-size: 1.7rem; margin: 0 0 6px; line-height: 1.3; }
+  h2 .num { color: var(--blue); margin-right: 8px; }
+  h3 { font-size: 1.15rem; margin: 28px 0 6px; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 18px; }
+  p, ul, ol { margin: 0 0 14px; }
+  li { margin-bottom: 4px; }
+  code { font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--soft); padding: .1em .38em; border-radius: 4px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: #fff; }
+  .card h3 { margin-top: 0; }
+  .callout { border-left: 5px solid var(--blue); background: var(--blue-soft); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+  .callout.warn { border-color: var(--amber); background: var(--amber-soft); }
+  .callout.bad { border-color: var(--red); background: var(--red-soft); }
+  .callout.good { border-color: var(--green); background: var(--green-soft); }
+  .callout strong.t { display: block; margin-bottom: 2px; }
+  figure { margin: 20px 0; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figcaption { color: var(--muted); font-size: .92rem; margin-top: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; margin: 12px 0 18px; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  td.yes { background: var(--green-soft); color: var(--green); font-weight: 600; }
+  td.no { background: var(--red-soft); color: var(--red); font-weight: 600; }
+  td.part { background: var(--amber-soft); color: var(--amber); font-weight: 600; }
+  .tag { display: inline-block; font-size: .78rem; font-weight: 700; padding: 1px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .tag.ok { color: var(--green); } .tag.stop { color: var(--red); } .tag.warn { color: var(--amber); } .tag.info { color: var(--blue); }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding: 4px 0 4px 44px; margin-bottom: 8px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 2px; width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; display: grid; place-items: center; }
+  details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin: 10px 0; background: var(--soft); }
+  summary { cursor: pointer; font-weight: 600; }
+  dl { margin: 0; } dt { font-weight: 700; margin-top: 12px; } dd { margin: 2px 0 0; color: #34404c; }
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; padding: 24px 0 48px; }
+  @media print { nav.toc { display: none; } header.hero { background: #12306b; -webkit-print-color-adjust: exact; print-color-adjust: exact; } section, figure, .card, table { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <h1>AI Self-Evolving Flow</h1>
+    <p>A small, safe laboratory for one big question: <strong>can software improve its own code automatically, without cheating and without breaking anything?</strong></p>
+    <div class="meta">Project overview, guardrails and test plan &middot; status as of 2026-11-24</div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#objective">1. Objective</a>
+  <a href="#problem">2. The problem</a>
+  <a href="#how">3. How it works</a>
+  <a href="#run">4. A real run</a>
+  <a href="#guardrails">5. Guardrails</a>
+  <a href="#defense">6. Defensive layers</a>
+  <a href="#proof">7. Attack tests</a>
+  <a href="#testplan">8. Test plan</a>
+  <a href="#limits">9. Limits</a>
+  <a href="#bugs">10. Lessons</a>
+  <a href="#reference">11. Reference</a>
+</div></nav>
+
+<main><div class="wrap">
+
+<!-- ============================================================ 1 -->
+<section id="objective">
+  <h2><span class="num">1</span>The objective</h2>
+  <p class="lead">Build a minimal &ldquo;self-improving&rdquo; loop, run it on a laptop, and study how it behaves.</p>
+
+  <p>Most software only changes when a person edits it. This project asks what happens when an <strong>AI edits the code, and the code is then tested and graded automatically</strong>, over and over. Each pass is called a <em>generation</em>. We keep the changes that help and throw away the ones that don&rsquo;t.</p>
+
+  <div class="grid g3">
+    <div class="card"><h3>What we build</h3><p>A command-line program (<code>pnpm evolve</code>) that runs the improve-test-grade loop for several generations and saves a record of every attempt.</p></div>
+    <div class="card"><h3>What we study</h3><p>Whether the loop really makes the code better, and whether the safety rules around it actually hold when the AI misbehaves.</p></div>
+    <div class="card"><h3>What we do not build</h3><p>No website, no database, no product for customers. It is an experiment. The problems it solves are deliberately tiny so we can focus on the <em>loop</em>, not the tasks.</p></div>
+  </div>
+
+  <h3>The cast, in everyday terms</h3>
+  <p>Think of a student, a tutor, a rulebook and a final exam.</p>
+
+  <figure>
+    <svg viewBox="0 0 920 440" role="img" aria-label="Diagram of the four roles: the MetaAgent rewrites the TaskAgent; the unit tests check it; a hidden exam scores it; only the score goes back to the MetaAgent.">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1c2530"/></marker>
+        <marker id="a1g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#17794a"/></marker>
+      </defs>
+      <!-- MetaAgent -->
+      <rect x="30" y="150" width="220" height="120" rx="14" fill="#e8f0fc" stroke="#1f5fbf" stroke-width="2"/>
+      <text x="140" y="188" text-anchor="middle" font-size="19" font-weight="700" fill="#1f5fbf">MetaAgent</text>
+      <text x="140" y="212" text-anchor="middle" font-size="14" fill="#1c2530">the tutor</text>
+      <text x="140" y="236" text-anchor="middle" font-size="13" fill="#5b6672">An AI that proposes</text>
+      <text x="140" y="254" text-anchor="middle" font-size="13" fill="#5b6672">new versions of the code</text>
+      <!-- TaskAgent -->
+      <rect x="350" y="150" width="220" height="120" rx="14" fill="#fff" stroke="#1c2530" stroke-width="2"/>
+      <text x="460" y="188" text-anchor="middle" font-size="19" font-weight="700">TaskAgent</text>
+      <text x="460" y="212" text-anchor="middle" font-size="14">the student</text>
+      <text x="460" y="236" text-anchor="middle" font-size="13" fill="#5b6672">The one code file that</text>
+      <text x="460" y="254" text-anchor="middle" font-size="13" fill="#5b6672">gets rewritten</text>
+      <!-- Unit tests -->
+      <rect x="670" y="30" width="230" height="110" rx="14" fill="#e6f5ec" stroke="#17794a" stroke-width="2"/>
+      <text x="785" y="66" text-anchor="middle" font-size="19" font-weight="700" fill="#17794a">Unit tests</text>
+      <text x="785" y="90" text-anchor="middle" font-size="14">the rulebook</text>
+      <text x="785" y="114" text-anchor="middle" font-size="13" fill="#5b6672">Hand-written. The code must</text>
+      <text x="785" y="130" text-anchor="middle" font-size="13" fill="#5b6672">pass these or it is thrown out</text>
+      <!-- Exam -->
+      <rect x="670" y="300" width="230" height="110" rx="14" fill="#fff4de" stroke="#b3261e" stroke-width="2" stroke-dasharray="7 5"/>
+      <text x="785" y="336" text-anchor="middle" font-size="19" font-weight="700" fill="#9a5b00">Frozen exam</text>
+      <text x="785" y="360" text-anchor="middle" font-size="14">the hidden answer key</text>
+      <text x="785" y="384" text-anchor="middle" font-size="13" fill="#b3261e" font-weight="700">LOCKED: the tutor never sees it</text>
+      <!-- arrows -->
+      <line x1="250" y1="210" x2="346" y2="210" stroke="#1c2530" stroke-width="2.5" marker-end="url(#a1)"/>
+      <text x="298" y="198" text-anchor="middle" font-size="13" font-weight="700">rewrites</text>
+      <line x1="668" y1="95" x2="574" y2="170" stroke="#17794a" stroke-width="2.5" marker-end="url(#a1g)"/>
+      <text x="596" y="104" text-anchor="middle" font-size="13" font-weight="700" fill="#17794a">must pass</text>
+      <line x1="668" y1="345" x2="574" y2="255" stroke="#1c2530" stroke-width="2.5" marker-end="url(#a1)"/>
+      <text x="604" y="334" text-anchor="middle" font-size="13" font-weight="700">grades</text>
+      <polyline points="668,392 140,392 140,274" fill="none" stroke="#1f5fbf" stroke-width="2.5" stroke-dasharray="2 0" marker-end="url(#a1)"/>
+      <text x="400" y="384" text-anchor="middle" font-size="13" font-weight="700" fill="#1f5fbf">only the score number goes back (never the questions)</text>
+    </svg>
+    <figcaption>Figure 1. Who does what. The tutor (an AI) edits the student&rsquo;s code. The rulebook decides if the edit is allowed. The hidden exam gives a score. Only that score travels back to the tutor.</figcaption>
+  </figure>
+
+  <h3>What the student actually does</h3>
+  <p>The TaskAgent is a small function that solves eight kinds of everyday text and number jobs: make text upper or lower case, reverse it, count words, add up numbers, find the biggest number, check whether a phrase is a palindrome, and turn a title into a web-friendly &ldquo;slug&rdquo;. They are easy on purpose. If the jobs were hard, we could not tell whether a failure came from the loop or from the job.</p>
+
+  <div class="callout good"><strong class="t">What success looks like</strong>
+  The loop runs at least three generations (five by default). Every generation is recorded with its code change, test result, score and time. The score goes up when a good change is proposed. Bad changes are caught and undone. And when we try to make the AI misbehave, the safety rules stop it.</div>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="problem">
+  <h2><span class="num">2</span>The problem we are trying to solve</h2>
+  <p class="lead">Letting an AI rewrite code is powerful, and risky in five specific ways.</p>
+
+  <div class="grid g2">
+    <div class="card"><h3>1. It can cheat</h3><p>If the AI can edit the tests, or peek at the answers, it can raise its score without getting any better. Like a student who changes the answer key.</p></div>
+    <div class="card"><h3>2. Its code is untrusted</h3><p>Code the AI writes could try to delete files, read passwords, run other programs, loop forever, or eat all the memory. We cannot assume it is friendly.</p></div>
+    <div class="card"><h3>3. It can quietly get worse</h3><p>A change can pass the basic checks and still make the real results worse. Without a rule against this, the code could slowly decay while everything looks fine.</p></div>
+    <div class="card"><h3>4. Nobody can tell what happened</h3><p>If nothing is written down, you cannot answer &ldquo;what changed, why, and did it help?&rdquo;. A self-changing system you cannot audit is not something you can trust.</p></div>
+  </div>
+  <div class="callout"><strong class="t">The question the project answers</strong>
+  Can we build the improve-and-test loop so that it is <em>honest</em> (no cheating), <em>contained</em> (bad code cannot hurt anything), <em>monotone</em> (never accepts a worse version) and <em>auditable</em> (everything is on record)?</div>
+
+  <h3>Each risk, and what we did about it</h3>
+  <table>
+    <thead><tr><th>Risk</th><th>Plain-language example</th><th>Defense we built</th></tr></thead>
+    <tbody>
+      <tr><td>Rewriting the rules</td><td>The AI edits a test so a broken change passes</td><td>The loop only ever writes <strong>one file</strong>. A fingerprint check of every protected file stops the whole run if any of them changes.</td></tr>
+      <tr><td>Peeking at answers</td><td>The AI reads the exam answer key</td><td>The exam is never put in the AI&rsquo;s prompt. The code runs in a locked room that cannot read the project folders. The test copy does not contain the exam at all.</td></tr>
+      <tr><td>Dangerous code</td><td>Code that deletes files or launches programs</td><td>A scan before anything runs, plus a locked sandbox that forbids writing files and starting programs.</td></tr>
+      <tr><td>Stealing secrets</td><td>Code reads the API key from the environment</td><td>Child programs get a short allow-list of environment settings. The key is not on it.</td></tr>
+      <tr><td>Runaway code</td><td>An endless loop, or printing gigabytes</td><td>A 30-second limit, a memory limit, an output size cap, and the whole process family is killed on timeout.</td></tr>
+      <tr><td>Quiet decay</td><td>Passes the tests, but scores lower</td><td>&ldquo;Never accept worse&rdquo;: a lower score restores the previous best code.</td></tr>
+      <tr><td>Broken starting point</td><td>The first version already fails its own tests</td><td>The run refuses to start and says why.</td></tr>
+      <tr><td>No memory</td><td>&ldquo;What did generation 3 change?&rdquo;</td><td>A permanent record line for every generation, with a readable diff and a run id.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="how">
+  <h2><span class="num">3</span>How the loop works</h2>
+  <p class="lead">Every generation walks the same path. Anything that fails is undone and written down.</p>
+
+  <figure>
+    <svg viewBox="0 0 920 1010" role="img" aria-label="Flowchart of one generation: baseline, propose, source screen, isolated tests, tamper check, frozen exam in sandbox, tamper check, keep-or-roll-back, archive, then repeat. Exits to the right show rejection, rollback, and stopping the run.">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1c2530"/></marker>
+        <marker id="a2r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#b3261e"/></marker>
+      </defs>
+      <style>
+        .st { fill:#fff; stroke:#1c2530; stroke-width:2; }
+        .stk { fill:#e8f0fc; stroke:#1f5fbf; stroke-width:2; }
+        .stg { fill:#e6f5ec; stroke:#17794a; stroke-width:2; }
+        .ex { fill:#fdeceb; stroke:#b3261e; stroke-width:2; }
+        .ex2 { fill:#fff4de; stroke:#9a5b00; stroke-width:2; }
+        .h { font-size:16px; font-weight:700; fill:#1c2530; }
+        .s { font-size:13px; fill:#5b6672; }
+        .eh { font-size:14px; font-weight:700; fill:#b3261e; }
+        .es { font-size:12.5px; fill:#5b6672; }
+      </style>
+
+      <rect class="stk" x="300" y="20" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="50" text-anchor="middle">0 &middot; Baseline (generation 0)</text>
+      <text class="s" x="470" y="72" text-anchor="middle">Test and grade the starting code. This is the bar to beat.</text>
+      <line x1="470" y1="90" x2="470" y2="124" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex" x="690" y="20" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="48" text-anchor="middle">Won&rsquo;t start</text>
+      <text class="es" x="800" y="66" text-anchor="middle">if the start fails its own tests</text>
+      <line x1="640" y1="55" x2="688" y2="55" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="st" x="300" y="125" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="155" text-anchor="middle">1 &middot; MetaAgent proposes new code</text>
+      <text class="s" x="470" y="177" text-anchor="middle">Sees: current code, practice prompts, past scores</text>
+      <line x1="470" y1="195" x2="470" y2="229" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex2" x="690" y="125" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="153" text-anchor="middle" fill="#9a5b00" style="fill:#9a5b00">AI call failed</text>
+      <text class="es" x="800" y="171" text-anchor="middle">logged; loop continues</text>
+      <line x1="640" y1="160" x2="688" y2="160" stroke="#9a5b00" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="st" x="300" y="230" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="260" text-anchor="middle">2 &middot; Source screen</text>
+      <text class="s" x="470" y="282" text-anchor="middle">Scans the text for forbidden things. Nothing runs yet.</text>
+      <line x1="470" y1="300" x2="470" y2="334" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex" x="690" y="230" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="258" text-anchor="middle">Rejected</text>
+      <text class="es" x="800" y="276" text-anchor="middle">never written, never run; logged</text>
+      <line x1="640" y1="265" x2="688" y2="265" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="st" x="300" y="335" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="365" text-anchor="middle">3 &middot; Unit tests in an isolated copy</text>
+      <text class="s" x="470" y="387" text-anchor="middle">A throw-away copy with no exam and no secrets</text>
+      <line x1="470" y1="405" x2="470" y2="439" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex" x="690" y="335" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="363" text-anchor="middle">Tests fail: roll back</text>
+      <text class="es" x="800" y="381" text-anchor="middle">old code restored; logged</text>
+      <line x1="640" y1="370" x2="688" y2="370" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="stg" x="300" y="440" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="470" text-anchor="middle">4 &middot; Tamper check #1</text>
+      <text class="s" x="470" y="492" text-anchor="middle">Compare fingerprints of every protected file</text>
+      <line x1="470" y1="510" x2="470" y2="544" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex" x="690" y="440" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="468" text-anchor="middle">Something changed: STOP</text>
+      <text class="es" x="800" y="486" text-anchor="middle">roll back, record, abort the run</text>
+      <line x1="640" y1="475" x2="688" y2="475" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="st" x="300" y="545" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="575" text-anchor="middle">5 &middot; Frozen exam in a locked sandbox</text>
+      <text class="s" x="470" y="597" text-anchor="middle">8 hidden tasks, one tiny locked process each</text>
+      <line x1="470" y1="615" x2="470" y2="649" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+
+      <rect class="stg" x="300" y="650" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="680" text-anchor="middle">6 &middot; Tamper check #2</text>
+      <text class="s" x="470" y="702" text-anchor="middle">Same check again, after the code ran for real</text>
+      <line x1="470" y1="720" x2="470" y2="754" stroke="#1c2530" stroke-width="2" marker-end="url(#a2)"/>
+      <rect class="ex" x="690" y="650" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="678" text-anchor="middle">Something changed: STOP</text>
+      <text class="es" x="800" y="696" text-anchor="middle">roll back, record, abort the run</text>
+      <line x1="640" y1="685" x2="688" y2="685" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+
+      <rect class="st" x="300" y="755" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="785" text-anchor="middle">7 &middot; Is the score at least as good as the best?</text>
+      <text class="s" x="470" y="807" text-anchor="middle">Ties are kept. Lower is not.</text>
+      <line x1="470" y1="825" x2="470" y2="859" stroke="#17794a" stroke-width="2" marker-end="url(#a2)"/>
+      <text x="482" y="848" class="s" style="fill:#17794a;font-weight:700">yes</text>
+      <rect class="ex" x="690" y="755" width="220" height="70" rx="10"/>
+      <text class="eh" x="800" y="783" text-anchor="middle">Lower score: roll back</text>
+      <text class="es" x="800" y="801" text-anchor="middle">best code restored; logged</text>
+      <line x1="640" y1="790" x2="688" y2="790" stroke="#b3261e" stroke-width="2" marker-end="url(#a2r)"/>
+      <text x="656" y="782" class="s" style="fill:#b3261e;font-weight:700">no</text>
+
+      <rect class="stg" x="300" y="860" width="340" height="70" rx="12"/>
+      <text class="h" x="470" y="890" text-anchor="middle">8 &middot; Keep it and write the record</text>
+      <text class="s" x="470" y="912" text-anchor="middle">One line in the archive: diff, tests, score, time</text>
+      <polyline points="300,895 240,895 240,160 296,160" fill="none" stroke="#1f5fbf" stroke-width="2.5" marker-end="url(#a2)"/>
+      <text x="228" y="540" text-anchor="middle" font-size="13" font-weight="700" fill="#1f5fbf" transform="rotate(-90 228 540)">next generation: repeat from step 1</text>
+      <text x="470" y="965" text-anchor="middle" font-size="13" fill="#5b6672">Every exit on the right also writes a line to the archive, so failures are visible too.</text>
+    </svg>
+    <figcaption>Figure 2. One generation. Red boxes are the ways a proposal can be stopped. Blue boxes grade; green boxes guard.</figcaption>
+  </figure>
+
+  <h3>Who can see and touch what</h3>
+  <table>
+    <thead><tr><th>Thing</th><th>MetaAgent can <strong>see</strong> it</th><th>MetaAgent can <strong>change</strong> it</th><th>AI-written code can reach it while running</th></tr></thead>
+    <tbody>
+      <tr><td>The TaskAgent code file</td><td class="yes">Yes</td><td class="yes">Yes (the only thing)</td><td class="yes">It is the code</td></tr>
+      <tr><td>Practice prompts (<code>training/</code>)</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Past scores (numbers only)</td><td class="yes">Yes</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>Frozen exam questions and answers (<code>eval/</code>)</td><td class="no">No</td><td class="no">No</td><td class="no">No (blocked)</td></tr>
+      <tr><td>Unit tests (<code>tests/</code>)</td><td class="no">No</td><td class="no">No</td><td class="part">Only a copy of one test file, in a throw-away folder</td></tr>
+      <tr><td>Loop, sandbox and guard code (<code>src/*.ts</code>)</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+      <tr><td>The API key</td><td class="no">No</td><td class="no">No</td><td class="no">No (removed from the environment)</td></tr>
+      <tr><td>The internet</td><td class="no">n/a</td><td class="no">n/a</td><td class="part">Not blocked (see limits)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="run">
+  <h2><span class="num">4</span>A real run, generation by generation</h2>
+  <p class="lead">This is the actual output of <code>pnpm evolve</code> on the project with no API key, using the built-in scripted demo MetaAgent.</p>
+
+  <figure>
+    <svg viewBox="0 0 920 470" role="img" aria-label="Bar chart of the score in each generation: 63, 75, rejected, 88, rolled back, 100.">
+      <style>
+        .gl { stroke:#dfe4ea; stroke-width:1; }
+        .ax { font-size:13px; fill:#5b6672; }
+        .lb { font-size:13px; font-weight:700; text-anchor:middle; }
+      </style>
+      <!-- grid: y(v) = 360 - 3.1*v -->
+      <line class="gl" x1="70" y1="360" x2="890" y2="360"/><text class="ax" x="60" y="364" text-anchor="end">0</text>
+      <line class="gl" x1="70" y1="282.5" x2="890" y2="282.5"/><text class="ax" x="60" y="286" text-anchor="end">25</text>
+      <line class="gl" x1="70" y1="205" x2="890" y2="205"/><text class="ax" x="60" y="209" text-anchor="end">50</text>
+      <line class="gl" x1="70" y1="127.5" x2="890" y2="127.5"/><text class="ax" x="60" y="131" text-anchor="end">75</text>
+      <line class="gl" x1="70" y1="50" x2="890" y2="50"/><text class="ax" x="60" y="54" text-anchor="end">100</text>
+      <text class="ax" x="16" y="205" transform="rotate(-90 16 205)" text-anchor="middle">score on the hidden exam</text>
+
+      <!-- bars: x = 105 + i*135, w=90 ; y=360-3.1*v -->
+      <rect x="105" y="164.7" width="90" height="195.3" fill="#1f5fbf"/><text class="lb" x="150" y="156" fill="#1f5fbf">63</text>
+      <rect x="240" y="127.5" width="90" height="232.5" fill="#17794a"/><text class="lb" x="285" y="119" fill="#17794a">75</text>
+      <rect x="375" y="127.5" width="90" height="232.5" fill="none" stroke="#9a5b00" stroke-width="2" stroke-dasharray="7 5"/>
+      <text class="lb" x="420" y="240" fill="#9a5b00">rejected</text><text class="ax" x="420" y="258" text-anchor="middle">before it</text><text class="ax" x="420" y="274" text-anchor="middle">ever ran</text>
+      <rect x="510" y="87.2" width="90" height="272.8" fill="#17794a"/><text class="lb" x="555" y="78" fill="#17794a">88</text>
+      <rect x="645" y="87.2" width="90" height="272.8" fill="none" stroke="#b3261e" stroke-width="2" stroke-dasharray="7 5"/>
+      <text class="lb" x="690" y="220" fill="#b3261e">rolled back</text><text class="ax" x="690" y="238" text-anchor="middle">failed the</text><text class="ax" x="690" y="254" text-anchor="middle">unit tests</text>
+      <rect x="780" y="50" width="90" height="310" fill="#17794a"/><text class="lb" x="825" y="41" fill="#17794a">100</text>
+
+      <text class="ax" x="150" y="384" text-anchor="middle" font-weight="700">Gen 0</text><text class="ax" x="150" y="402" text-anchor="middle">baseline</text>
+      <text class="ax" x="285" y="384" text-anchor="middle" font-weight="700">Gen 1</text><text class="ax" x="285" y="402" text-anchor="middle">fix biggest-number</text>
+      <text class="ax" x="420" y="384" text-anchor="middle" font-weight="700">Gen 2</text><text class="ax" x="420" y="402" text-anchor="middle">tries to read a file</text>
+      <text class="ax" x="555" y="384" text-anchor="middle" font-weight="700">Gen 3</text><text class="ax" x="555" y="402" text-anchor="middle">fix palindromes</text>
+      <text class="ax" x="690" y="384" text-anchor="middle" font-weight="700">Gen 4</text><text class="ax" x="690" y="402" text-anchor="middle">breaks upper-casing</text>
+      <text class="ax" x="825" y="384" text-anchor="middle" font-weight="700">Gen 5</text><text class="ax" x="825" y="402" text-anchor="middle">fix slugs (digits)</text>
+
+      <rect x="70" y="425" width="14" height="14" fill="#17794a"/><text class="ax" x="90" y="437">kept (score not lower)</text>
+      <rect x="250" y="425" width="14" height="14" fill="none" stroke="#9a5b00" stroke-width="2" stroke-dasharray="3 2"/><text class="ax" x="270" y="437">stopped by the source screen</text>
+      <rect x="500" y="425" width="14" height="14" fill="none" stroke="#b3261e" stroke-width="2" stroke-dasharray="3 2"/><text class="ax" x="520" y="437">stopped by the unit tests (dashed box shows the best score kept)</text>
+    </svg>
+    <figcaption>Figure 3. The score climbs from 63 to 100. The two bad ideas never touch the kept code.</figcaption>
+  </figure>
+
+  <ol class="steps">
+    <li><strong>Baseline: 63.</strong> The starting code passes every unit test but gets 3 of the 8 hidden exam tasks wrong. This is deliberate: it leaves room to improve.</li>
+    <li><strong>Gen 1: 75, kept.</strong> Fixes &ldquo;biggest number&rdquo; for lists of only negative numbers.</li>
+    <li><strong>Gen 2: rejected.</strong> Tries to add a file-reading import. The source screen refuses it before it is saved or run.</li>
+    <li><strong>Gen 3: 88, kept.</strong> Palindrome check now ignores commas and colons.</li>
+    <li><strong>Gen 4: rolled back.</strong> A mistake that turns upper-casing into lower-casing. The unit tests catch it and the old code is restored.</li>
+    <li><strong>Gen 5: 100, kept.</strong> Slugs now keep digits, so &ldquo;Systems 2026&rdquo; stays &ldquo;systems-2026&rdquo;.</li>
+  </ol>
+  <div class="callout warn"><strong class="t">Read this honestly</strong>
+  This run uses a <em>scripted</em> stand-in for the AI. Its five steps were written by hand by someone who knew the starting code&rsquo;s weaknesses. It never reads the exam, but it proves only that the <strong>machinery</strong> works: baseline, selection, screening, testing and roll-back. It is <strong>not</strong> evidence that an AI can improve code by itself. That needs a run with a real AI, which has not been done yet.</div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="guardrails">
+  <h2><span class="num">5</span>The four guardrails</h2>
+  <p class="lead">These are the project&rsquo;s hard rules, from the original brief. Here is each one in plain words, with how it is enforced.</p>
+
+  <div class="grid g2">
+    <div class="card"><h3>1. Tests first, and a one-file rule <span class="tag ok">enforced</span></h3>
+      <p><strong>Rule:</strong> hand-written tests decide what is acceptable. The AI may change only the one TaskAgent file, never the tests, the grader or the loop.</p>
+      <p><strong>How:</strong> the loop is written to save to exactly one path. Every protected file is fingerprinted at the start and checked again; any difference rolls back the change and stops the run. A change that fails the tests is undone.</p></div>
+    <div class="card"><h3>2. Sandbox <span class="tag warn">partly enforced</span></h3>
+      <p><strong>Rule:</strong> code written by the AI must never run loose on the main computer. It needs a time limit and a memory limit.</p>
+      <p><strong>How:</strong> it runs in a separate, locked-down child process (no file writing, no starting programs, no secrets) with a 30 s limit, a 256 MB memory limit and an output cap. Docker is not used, and internet access is not blocked. See section 9.</p></div>
+    <div class="card"><h3>3. Frozen exam <span class="tag ok">enforced</span></h3>
+      <p><strong>Rule:</strong> the AI must never see the exam. It sees only practice prompts and past scores.</p>
+      <p><strong>How:</strong> the exam is read only by the grader. It is not in the AI&rsquo;s prompt, it is not in the test copy, and the sandbox cannot read outside its temp folder.</p></div>
+    <div class="card"><h3>4. Archive <span class="tag ok">enforced</span></h3>
+      <p><strong>Rule:</strong> every generation is written down in a simple file, one record per line (JSONL).</p>
+      <p><strong>How:</strong> each line has the generation, code diff, test result, score and time, plus whether it was kept, the best score so far, a run id, and why it was stopped if it was.</p></div>
+  </div>
+
+  <h3>What one archive line looks like</h3>
+  <details open><summary>Fields in <code>outputs/archive.jsonl</code></summary>
+    <table>
+      <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>runId</code></td><td>Which run this line belongs to, so repeated runs do not get mixed up.</td></tr>
+        <tr><td><code>generation</code></td><td>0 is the baseline; 1, 2, 3&hellip; are the AI&rsquo;s attempts.</td></tr>
+        <tr><td><code>codeDiff</code></td><td>A readable &ldquo;what changed&rdquo; (lines removed and added). Windows vs Unix line endings are ignored.</td></tr>
+        <tr><td><code>testPass</code>, <code>score</code></td><td>Did it pass the unit tests, and what did it score on the hidden exam (empty if it never got that far).</td></tr>
+        <tr><td><code>accepted</code>, <code>bestScore</code></td><td>Was this version kept, and the best kept score so far.</td></tr>
+        <tr><td><code>timestamp</code>, <code>proposal</code></td><td>When it happened and a one-line description of the attempt.</td></tr>
+        <tr><td><code>rejectedBy</code>, <code>testError</code>, <code>rollbackReason</code>, <code>tamperedPaths</code></td><td>Only present when relevant: why the attempt was stopped.</td></tr>
+      </tbody>
+    </table>
+  </details>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="defense">
+  <h2><span class="num">6</span>Defensive layers</h2>
+  <p class="lead">No single wall is trusted. The AI&rsquo;s code sits in the middle of several layers, so if one fails another still holds.</p>
+
+  <figure>
+    <svg viewBox="0 0 920 640" role="img" aria-label="Concentric layers around AI-written code: locked sandbox, isolated copy, source screen, tamper alarm, selection, archive.">
+      <style>
+        .rg { fill:#fff; stroke-width:2.5; }
+        .rl { font-size:14px; font-weight:700; }
+        .rs { font-size:12.5px; fill:#5b6672; }
+      </style>
+      <rect class="rg" x="10"  y="10"  width="900" height="620" rx="26" stroke="#5b6672" fill="#f5f7fa"/>
+      <text class="rl" x="30" y="34" fill="#1c2530">6 &middot; Archive: every attempt, kept or not, is written down</text>
+      <rect class="rg" x="58" y="58" width="804" height="524" rx="24" stroke="#1f5fbf" fill="#e8f0fc"/>
+      <text class="rl" x="78" y="82" fill="#1f5fbf">5 &middot; Selection: a version is kept only if its score is not lower</text>
+      <rect class="rg" x="106" y="106" width="708" height="428" rx="22" stroke="#b3261e" fill="#fdeceb"/>
+      <text class="rl" x="126" y="130" fill="#b3261e">4 &middot; Tamper alarm: fingerprints of protected files, checked twice</text>
+      <rect class="rg" x="154" y="154" width="612" height="332" rx="20" stroke="#9a5b00" fill="#fff4de"/>
+      <text class="rl" x="174" y="178" fill="#9a5b00">3 &middot; Source screen: forbidden code is rejected before it ever runs</text>
+      <rect class="rg" x="202" y="202" width="516" height="236" rx="18" stroke="#17794a" fill="#e6f5ec"/>
+      <text class="rl" x="222" y="226" fill="#17794a">2 &middot; Isolated copy: tests run in a throw-away folder, no secrets</text>
+      <rect class="rg" x="250" y="250" width="420" height="140" rx="16" stroke="#1c2530" fill="#fff"/>
+      <text class="rl" x="270" y="274" fill="#1c2530">1 &middot; Locked sandbox (while being graded)</text>
+      <text class="rs" x="270" y="293">no writing &middot; no programs &middot; read only its own temp folder</text>
+      <rect x="320" y="312" width="280" height="56" rx="10" fill="#1c2530"/>
+      <text x="460" y="337" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">AI-written code</text>
+      <text x="460" y="356" text-anchor="middle" font-size="12.5" fill="#d6dbe2">untrusted until proven otherwise</text>
+    </svg>
+    <figcaption>Figure 4. Defense in depth. The innermost box is the code we do not trust; every ring around it is a separate protection.</figcaption>
+  </figure>
+
+  <h3>What each layer does, in detail</h3>
+  <dl>
+    <dt>Layer 3 &middot; Source screen <span class="tag info">before anything runs</span></dt>
+    <dd>Reads the proposed code as text and refuses it if it contains: any <code>import</code> of another module (including built-ins), <code>require</code>, a dynamic <code>import()</code>, <code>process</code>, <code>globalThis</code>, <code>eval</code> or the <code>Function</code> constructor, network calls (<code>fetch</code>, <code>WebSocket</code>), or references to <code>child_process</code>, <code>worker_threads</code>, <code>Deno</code> or <code>Bun</code>. The TaskAgent is a pure calculation, so it never needs any of these. This is a quick filter, not a proof of safety, and clever code could try to disguise itself, which is why the other layers exist.</dd>
+
+    <dt>Layer 2 &middot; Isolated test copy</dt>
+    <dd>The unit tests do not run in the real project. The loop builds a temporary copy that holds only the one test file and the TaskAgent, links the installed tools, and runs the tests there with a short allow-list of environment settings (no API key), a time limit and an output cap. The hidden exam is not in the copy. If the test run hangs, the whole family of processes is killed.</dd>
+
+    <dt>Layer 1 &middot; Locked sandbox <span class="tag info">while grading</span></dt>
+    <dd>Each exam task runs in its own tiny Node.js process started inside an empty temporary folder, using Node&rsquo;s built-in permission system: <strong>no writing files, no starting other programs, no starting workers, reading only that temporary folder</strong>. It also has a heap memory limit (256 MB), a hard time limit (30 s, then force-kill), and a cap (1 MB) on how much it may print.</dd>
+
+    <dt>Layer 4 &middot; Tamper alarm</dt>
+    <dd>At the start of a run the loop takes a fingerprint (SHA-256 hash) of every protected file: all tests, the exam, the practice prompts, the loop/sandbox/guard code, and the project configuration. After the tests and again after grading it compares. If even one byte differs, the TaskAgent is rolled back, the attempt is recorded with the names of the changed files, and the <strong>whole run stops</strong>.</dd>
+
+    <dt>Layer 5 &middot; Selection (&ldquo;never accept worse&rdquo;)</dt>
+    <dd>The starting code is graded first (the baseline). A later version is kept only if it passes the tests <em>and</em> scores at least as high as the best kept so far. Otherwise the best code is restored. Ties are kept. Each attempt is compared with the best kept version, not with the previous attempt, so one bad try cannot lower the bar.</dd>
+
+    <dt>Layer 6 &middot; Archive</dt>
+    <dd>One line per attempt, including the failures. You can always answer: what changed, did it pass, what did it score, was it kept, and why not.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="proof">
+  <h2><span class="num">7</span>Do the defenses really work? The attack tests</h2>
+  <p class="lead">We wrote a deliberately hostile TaskAgent and let it try to break out. Then we ran the very same code <em>without</em> the sandbox, as a control, to prove the attacks were real.</p>
+
+  <table>
+    <thead><tr><th>What the hostile code tried</th><th>Without the sandbox (control)</th><th>Inside the sandbox</th></tr></thead>
+    <tbody>
+      <tr><td>Read a secret file outside its folder (stand-in for the exam)</td><td class="no">ALLOWED</td><td class="yes">Blocked</td></tr>
+      <tr><td>Overwrite a file outside its folder (stand-in for the tests)</td><td class="no">ALLOWED</td><td class="yes">Blocked, and the file was checked afterwards: unchanged</td></tr>
+      <tr><td>Start another program</td><td class="no">ALLOWED</td><td class="yes">Blocked</td></tr>
+      <tr><td>Read the API key from the environment</td><td class="no">LEAKED</td><td class="yes">Absent</td></tr>
+      <tr><td>Loop forever</td><td class="no">Would hang</td><td class="yes">Killed after the time limit</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><strong class="t">Why the control run matters</strong>
+  A test that only says &ldquo;blocked&rdquo; can be fooled: an earlier version of this check looked successful but was blocking for the wrong reason (it passed an empty file name). The control run shows the same attacks succeed when the guard is off, so a &ldquo;blocked&rdquo; result is meaningful.</div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="testplan">
+  <h2><span class="num">8</span>The test plan</h2>
+  <p class="lead">61 automated tests across 6 files, plus hands-on runs of the real project. Run them with <code>pnpm test</code> (about 90 seconds, because many tests start real processes).</p>
+
+  <h3>What we test, and why</h3>
+  <ol class="steps">
+    <li><strong>The student&rsquo;s skills</strong> (14 tests): each of the eight jobs works, plus edge cases such as empty text and empty lists. These are the &ldquo;rulebook&rdquo; the AI&rsquo;s code must always pass.</li>
+    <li><strong>The guards</strong> (13 + 7 tests): the source screen accepts clean code and rejects each forbidden pattern; the fingerprint check detects changed, added and removed files; the secret key is not passed on; timeouts and output caps work; the diff output is correct.</li>
+    <li><strong>The sandbox under attack</strong> (3 tests): the hostile code from section 7, with its control run.</li>
+    <li><strong>The loop itself</strong> (19 tests): a baseline is recorded; a bad proposal is rolled back; a hostile proposal is screened; an AI failure is logged and the run continues; changing a test or the exam stops the run; a lower score is rolled back; a tie or improvement is kept; run ids are distinct. Includes the isolated test runner.</li>
+    <li><strong>The whole thing, end to end</strong> (5 tests): the scripted demo runs five real generations and must produce exactly 63, 75, rejected, 88, rolled back, 100.</li>
+  </ol>
+
+  <figure>
+    <svg viewBox="0 0 920 330" role="img" aria-label="Bar chart of test counts per file: evolve 19, task-agent 14, guard 13, diff 7, scripted 5, sandbox 3.">
+      <style> .tl{font-size:14px;fill:#1c2530} .tn{font-size:14px;font-weight:700;fill:#fff} .tc{font-size:13px;fill:#5b6672} </style>
+      <!-- scale 20px per test, bars start x=250 -->
+      <text class="tl" x="240" y="38" text-anchor="end">evolve.test.ts</text><rect x="250" y="20" width="380" height="30" rx="5" fill="#1f5fbf"/><text class="tn" x="262" y="41">19</text><text class="tc" x="640" y="41">the loop, selection, tamper stop, isolated test runner</text>
+      <text class="tl" x="240" y="82" text-anchor="end">task-agent.test.ts</text><rect x="250" y="64" width="280" height="30" rx="5" fill="#17794a"/><text class="tn" x="262" y="85">14</text><text class="tc" x="540" y="85">the eight jobs and their edge cases</text>
+      <text class="tl" x="240" y="126" text-anchor="end">guard.test.ts</text><rect x="250" y="108" width="260" height="30" rx="5" fill="#9a5b00"/><text class="tn" x="262" y="129">13</text><text class="tc" x="520" y="129">source screen, fingerprints, key hiding, timeouts</text>
+      <text class="tl" x="240" y="170" text-anchor="end">diff.test.ts</text><rect x="250" y="152" width="140" height="30" rx="5" fill="#5b6672"/><text class="tn" x="262" y="173">7</text><text class="tc" x="400" y="173">the &ldquo;what changed&rdquo; view</text>
+      <text class="tl" x="240" y="214" text-anchor="end">scripted-meta-agent.test.ts</text><rect x="250" y="196" width="100" height="30" rx="5" fill="#1f5fbf"/><text class="tn" x="262" y="217">5</text><text class="tc" x="360" y="217">full five-generation demo run</text>
+      <text class="tl" x="240" y="258" text-anchor="end">sandbox.test.ts</text><rect x="250" y="240" width="60" height="30" rx="5" fill="#b3261e"/><text class="tn" x="262" y="261">3</text><text class="tc" x="320" y="261">hostile code vs the locked sandbox</text>
+      <text class="tc" x="250" y="304">Total: 61 tests, all passing. Slow tests run real isolated processes on purpose.</text>
+    </svg>
+    <figcaption>Figure 5. Where the tests are. Most of the weight is on the loop and the guards, because that is what the experiment is about.</figcaption>
+  </figure>
+
+  <h3>How we make sure the tests can actually fail</h3>
+  <ul>
+    <li><strong>Control runs.</strong> The attack test runs the same hostile code unprotected and expects it to succeed.</li>
+    <li><strong>Regression tests that fail without the fix.</strong> For the Windows drive-letter bug (section 10) we removed the fix and confirmed the test fails, then restored it.</li>
+    <li><strong>Real outcomes, not just return values.</strong> The write-attack test re-reads the target file from disk to prove it was not changed.</li>
+    <li><strong>Real processes.</strong> Timeout and output-cap tests start real child processes and really kill them.</li>
+  </ul>
+
+  <h3>Hands-on checks beyond the automated tests</h3>
+  <ul>
+    <li><code>pnpm evolve</code> run on the real project with the scripted MetaAgent: baseline 63, then 75, rejected, 88, rolled back, 100.</li>
+    <li>A run where a deliberately broken generation was rolled back and a later good one was kept.</li>
+    <li>Checks after each run that the real dependencies were not deleted by clean-up and that no stray processes were left.</li>
+    <li>A browser check is not applicable: there is no web interface by design.</li>
+  </ul>
+
+  <h3>Does it meet the original brief?</h3>
+  <table>
+    <thead><tr><th>Requirement</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td><code>pnpm evolve</code> runs at least 3 generations (default 5)</td><td class="yes">Done</td><td>Five generations by default.</td></tr>
+      <tr><td><code>pnpm test</code> runs the unit tests</td><td class="yes">Done</td><td>61 tests.</td></tr>
+      <tr><td>Archive of each generation as JSONL</td><td class="yes">Done</td><td><code>outputs/archive.jsonl</code>.</td></tr>
+      <tr><td>Tests first; the AI edits only the TaskAgent; failing tests roll back</td><td class="yes">Done</td><td>Plus fingerprint check that stops the run.</td></tr>
+      <tr><td>Frozen exam hidden from the AI</td><td class="yes">Done</td><td>Verified by design and by attack test.</td></tr>
+      <tr><td>Generated code in Docker or a separate process, with limits</td><td class="part">Partly</td><td>Separate locked process with time, memory and output limits. No Docker; internet not blocked.</td></tr>
+      <tr><td>Gate runs literally <code>pnpm test</code></td><td class="part">Equivalent</td><td>Runs the same <code>vitest run</code> in an isolated copy instead.</td></tr>
+      <tr><td>Works with a real LLM (GPT-4o or Claude)</td><td class="no">Not yet tested</td><td>Code path exists; has never been run.</td></tr>
+      <tr><td>README with run, add-a-domain and guardrail settings</td><td class="yes">Done</td><td>Kept up to date.</td></tr>
+      <tr><td>No web UI, no database</td><td class="yes">Done</td><td>Files only.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ 9 -->
+<section id="limits">
+  <h2><span class="num">9</span>Known limits: what this does not prove</h2>
+  <p class="lead">A safety document that only lists strengths is not trustworthy. These are the gaps.</p>
+
+  <div class="callout bad"><strong class="t">The internet is not blocked</strong>
+  Node&rsquo;s permission system does not restrict network access. The source screen forbids network calls and the key is hidden, but a determined piece of code could still try. Full isolation would need Docker with networking turned off.</div>
+  <div class="callout warn"><strong class="t">The source screen is a filter, not a proof</strong>
+  It matches words and patterns. Obfuscated code could slip past it, which is exactly why the sandbox, the isolated copy and the fingerprint check also exist.</div>
+  <div class="callout warn"><strong class="t">The test phase is not permission-locked</strong>
+  The unit tests run in an isolated copy with no secrets, but not inside the stricter permission sandbox (the test framework needs more freedom than that). The screen and the fingerprint check cover that gap.</div>
+  <div class="callout warn"><strong class="t">The real AI has not run yet</strong>
+  Everything here was shown with a scripted stand-in. Whether a real model can raise the score, and how it behaves when it fails, is the actual experiment, and it is still to do.</div>
+  <div class="callout"><strong class="t">Smaller things</strong>
+  <ul>
+    <li>The Linux/macOS version of &ldquo;kill the whole process family&rdquo; is written but has only been run on Windows.</li>
+    <li>The tiny task set (8 jobs) can be solved fully; a real study needs harder, more varied tasks.</li>
+    <li>The loop changes the code file in place. After a run the file holds the best version; reset it with <code>git checkout -- src/task-agent/TaskAgent.ts</code>.</li>
+    <li>The repository on GitHub is public, so the code and these notes are visible to anyone.</li>
+  </ul></div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section id="bugs">
+  <h2><span class="num">10</span>What the tests taught us</h2>
+  <p class="lead">Writing the tests exposed real problems. That is the point of testing.</p>
+  <div class="grid g3">
+    <div class="card"><h3>Orphaned processes</h3><p>On a timeout only the main process was killed. The test framework&rsquo;s helper processes kept running and locked the temp folder. Now the whole process family is killed.</p></div>
+    <div class="card"><h3>A check that proved nothing</h3><p>An early &ldquo;it is blocked&rdquo; check was blocking because of an empty input, not because of the sandbox. The new attack test has a control run to prevent this.</p></div>
+    <div class="card"><h3>Windows drive letters</h3><p>The test framework failed when the project path used <code>d:</code> instead of <code>D:</code>, because it loaded itself twice. The loop now links tools through their canonical path, with a regression test.</p></div>
+  </div>
+</section>
+
+<!-- ============================================================ 11 -->
+<section id="reference">
+  <h2><span class="num">11</span>Reference</h2>
+
+  <h3>Where things live</h3>
+  <table>
+    <thead><tr><th>Path</th><th>What it is</th><th>Can the AI change it?</th></tr></thead>
+    <tbody>
+      <tr><td><code>src/task-agent/TaskAgent.ts</code></td><td>The student: the code being improved</td><td class="yes">Yes: the only file</td></tr>
+      <tr><td><code>tests/</code></td><td>Unit tests and harness tests</td><td class="no">No</td></tr>
+      <tr><td><code>eval/</code></td><td>The frozen exam: tasks and answers</td><td class="no">No, and it cannot see it</td></tr>
+      <tr><td><code>training/</code></td><td>Practice prompts the AI may see</td><td class="no">No</td></tr>
+      <tr><td><code>src/evolve.ts</code>, <code>cli.ts</code></td><td>The loop and its command-line entry</td><td class="no">No</td></tr>
+      <tr><td><code>src/guard.ts</code>, <code>isolation.ts</code>, <code>sandbox.ts</code>, <code>test-runner.ts</code></td><td>Source screen, fingerprints, process limits, locked sandbox, isolated tests</td><td class="no">No</td></tr>
+      <tr><td><code>src/meta-agent.ts</code>, <code>scripted-meta-agent.ts</code></td><td>The AI client and the key-free demo stand-in</td><td class="no">No</td></tr>
+      <tr><td><code>src/diff.ts</code>, <code>evaluator.ts</code></td><td>&ldquo;What changed&rdquo; view and the grader</td><td class="no">No</td></tr>
+      <tr><td><code>outputs/archive.jsonl</code></td><td>The permanent record</td><td>Written by the loop only</td></tr>
+    </tbody>
+  </table>
+
+  <h3>How to run it</h3>
+  <ol class="steps">
+    <li>Install: <code>corepack enable</code>, then <code>pnpm install</code>, then copy <code>.env.example</code> to <code>.env</code>. Needs Node.js 22.3 or newer.</li>
+    <li>Run the tests: <code>pnpm test</code>.</li>
+    <li>Watch the loop with no key: <code>pnpm evolve</code>. To use a real AI, put <code>OPENAI_API_KEY</code> in <code>.env</code>.</li>
+    <li>Tune the guardrails in <code>.env</code>: <code>EVOLUTION_GENERATIONS</code>, <code>SANDBOX_TIMEOUT_MS</code>, <code>SANDBOX_MEMORY_MB</code>.</li>
+    <li>Run again from the starting code: <code>git checkout -- src/task-agent/TaskAgent.ts</code>.</li>
+  </ol>
+
+  <h3>Glossary</h3>
+  <dl>
+    <dt>Generation</dt><dd>One pass of the loop: propose, check, grade, keep or undo. Generation 0 is the starting code.</dd>
+    <dt>Baseline</dt><dd>The score of the starting code. Every later version must at least match the best score so far.</dd>
+    <dt>MetaAgent / TaskAgent</dt><dd>The AI that edits code / the code being edited.</dd>
+    <dt>Frozen exam (eval set)</dt><dd>A fixed set of graded tasks the AI is never shown, so a good score cannot come from memorizing it.</dd>
+    <dt>Roll back</dt><dd>Restore the previous best code after a rejected attempt.</dd>
+    <dt>Sandbox</dt><dd>A locked room for running untrusted code: it can compute, but cannot reach the rest of the computer.</dd>
+    <dt>Hash / fingerprint</dt><dd>A short code computed from a file&rsquo;s contents. If the file changes by even one character, the fingerprint changes.</dd>
+    <dt>Source screen</dt><dd>A text scan that rejects code containing forbidden words before it is ever executed.</dd>
+    <dt>JSONL</dt><dd>A plain text file with one small record per line. Easy to read, search and process.</dd>
+    <dt>Control run</dt><dd>The same test with the protection switched off, to show the test would notice a failure.</dd>
+    <dt>Process tree</dt><dd>A program together with every helper program it started.</dd>
+  </dl>
+
+  <h3>Where the work stands (2026-11-24)</h3>
+  <table>
+    <thead><tr><th>Change</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Isolation and tamper detection</td><td class="yes">Merged (PR #1)</td></tr>
+      <tr><td>Selection, baseline, run ids, real diff, seed with room to improve</td><td class="part">PR #2 open</td></tr>
+      <tr><td>Key-free scripted MetaAgent</td><td class="part">Committed locally on its own branch, not yet pushed</td></tr>
+      <tr><td>First run with a real AI model</td><td class="no">Not done</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div></main>
+
+<footer><div class="wrap">Generated from the repository&rsquo;s code and test results on 2026-11-24. Numbers (61 tests; scores 63, 75, 88, 100) come from real runs of this project.</div></footer>
+</body>
+</html>
