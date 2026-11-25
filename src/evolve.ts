@@ -60,9 +60,10 @@ export function newRunId(): string {
  * The evolution loop. Everything is relative to `root` so it can run against a fixture
  * project in tests.
  *
- * Selection: a generation is kept only if it passes the tests AND its score is not lower
- * than the best accepted score so far (the baseline counts). Otherwise the previous best
- * source is restored. Throws (after rolling the TaskAgent back and archiving the
+ * Selection: a generation is kept only if it passes the tests AND its score is strictly
+ * higher than the best accepted score so far (the baseline counts). A tie is rolled back,
+ * so whitespace-only or no-op rewrites are never recorded as progress. Otherwise the
+ * previous best source is restored. Throws (after rolling the TaskAgent back and archiving the
  * generation) when a protected file changed during a generation.
  */
 export async function evolve(options: EvolveOptions): Promise<void> {
@@ -201,7 +202,11 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     await checkTamper(generation, bestSource, proposal.source, proposal.proposal, bestScore);
     pastScores.push(evaluation.score);
 
-    if (evaluation.score < bestScore) {
+    if (evaluation.score <= bestScore) {
+      const reason =
+        evaluation.score < bestScore
+          ? `score ${evaluation.score} is below the best score ${bestScore}`
+          : `score ${evaluation.score} does not improve on the best score ${bestScore}`;
       await writeFile(sourcePath, bestSource, 'utf8');
       await archive({
         generation,
@@ -212,9 +217,9 @@ export async function evolve(options: EvolveOptions): Promise<void> {
         bestScore,
         proposal: proposal.proposal,
         evaluatorFailures: evaluation.failures,
-        rollbackReason: `score ${evaluation.score} is below the best score ${bestScore}`,
+        rollbackReason: reason,
       });
-      log(`Generation ${generation}: score ${evaluation.score}/100 is below ${bestScore}; rolled back`);
+      log(`Generation ${generation}: ${reason}; rolled back`);
       continue;
     }
 

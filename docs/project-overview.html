@@ -270,7 +270,7 @@
 
       <rect class="st" x="300" y="755" width="340" height="70" rx="12"/>
       <text class="h" x="470" y="785" text-anchor="middle">7 &middot; Is the score at least as good as the best?</text>
-      <text class="s" x="470" y="807" text-anchor="middle">Ties are kept. Lower is not.</text>
+      <text class="s" x="470" y="807" text-anchor="middle">Only a higher score is kept.</text>
       <line x1="470" y1="825" x2="470" y2="859" stroke="#17794a" stroke-width="2" marker-end="url(#a2)"/>
       <text x="482" y="848" class="s" style="fill:#17794a;font-weight:700">yes</text>
       <rect class="ex" x="690" y="755" width="220" height="70" rx="10"/>
@@ -342,7 +342,7 @@
       <text class="ax" x="690" y="384" text-anchor="middle" font-weight="700">Gen 4</text><text class="ax" x="690" y="402" text-anchor="middle">breaks upper-casing</text>
       <text class="ax" x="825" y="384" text-anchor="middle" font-weight="700">Gen 5</text><text class="ax" x="825" y="402" text-anchor="middle">fix slugs (digits)</text>
 
-      <rect x="70" y="425" width="14" height="14" fill="#17794a"/><text class="ax" x="90" y="437">kept (score not lower)</text>
+      <rect x="70" y="425" width="14" height="14" fill="#17794a"/><text class="ax" x="90" y="437">kept (score higher)</text>
       <rect x="250" y="425" width="14" height="14" fill="none" stroke="#9a5b00" stroke-width="2" stroke-dasharray="3 2"/><text class="ax" x="270" y="437">stopped by the source screen</text>
       <rect x="500" y="425" width="14" height="14" fill="none" stroke="#b3261e" stroke-width="2" stroke-dasharray="3 2"/><text class="ax" x="520" y="437">stopped by the unit tests (dashed box shows the best score kept)</text>
     </svg>
@@ -413,7 +413,7 @@
       <rect class="rg" x="10"  y="10"  width="900" height="620" rx="26" stroke="#5b6672" fill="#f5f7fa"/>
       <text class="rl" x="30" y="34" fill="#1c2530">6 &middot; Archive: every attempt, kept or not, is written down</text>
       <rect class="rg" x="58" y="58" width="804" height="524" rx="24" stroke="#1f5fbf" fill="#e8f0fc"/>
-      <text class="rl" x="78" y="82" fill="#1f5fbf">5 &middot; Selection: a version is kept only if its score is not lower</text>
+      <text class="rl" x="78" y="82" fill="#1f5fbf">5 &middot; Selection: a version is kept only if its score is higher</text>
       <rect class="rg" x="106" y="106" width="708" height="428" rx="22" stroke="#b3261e" fill="#fdeceb"/>
       <text class="rl" x="126" y="130" fill="#b3261e">4 &middot; Tamper alarm: fingerprints of protected files, checked twice</text>
       <rect class="rg" x="154" y="154" width="612" height="332" rx="20" stroke="#9a5b00" fill="#fff4de"/>
@@ -445,7 +445,7 @@
     <dd>At the start of a run the loop takes a fingerprint (SHA-256 hash) of every protected file: all tests, the exam, the practice prompts, the loop/sandbox/guard code, and the project configuration. After the tests and again after grading it compares. If even one byte differs, the TaskAgent is rolled back, the attempt is recorded with the names of the changed files, and the <strong>whole run stops</strong>.</dd>
 
     <dt>Layer 5 &middot; Selection (&ldquo;never accept worse&rdquo;)</dt>
-    <dd>The starting code is graded first (the baseline). A later version is kept only if it passes the tests <em>and</em> scores at least as high as the best kept so far. Otherwise the best code is restored. Ties are kept. Each attempt is compared with the best kept version, not with the previous attempt, so one bad try cannot lower the bar.</dd>
+    <dd>The starting code is graded first (the baseline). A later version is kept only if it passes the tests <em>and</em> scores higher than the best kept so far. Otherwise the best code is restored. Ties are rolled back, so no-op rewrites never count as progress. Each attempt is compared with the best kept version, not with the previous attempt, so one bad try cannot lower the bar.</dd>
 
     <dt>Layer 6 &middot; Archive</dt>
     <dd>One line per attempt, including the failures. You can always answer: what changed, did it pass, what did it score, was it kept, and why not.</dd>
@@ -481,7 +481,7 @@
     <li><strong>The student&rsquo;s skills</strong> (14 tests): each of the eight jobs works, plus edge cases such as empty text and empty lists. These are the &ldquo;rulebook&rdquo; the AI&rsquo;s code must always pass.</li>
     <li><strong>The guards</strong> (13 + 7 tests): the source screen accepts clean code and rejects each forbidden pattern; the fingerprint check detects changed, added and removed files; the secret key is not passed on; timeouts and output caps work; the diff output is correct.</li>
     <li><strong>The sandbox under attack</strong> (3 tests): the hostile code from section 7, with its control run.</li>
-    <li><strong>The loop itself</strong> (19 tests): a baseline is recorded; a bad proposal is rolled back; a hostile proposal is screened; an AI failure is logged and the run continues; changing a test or the exam stops the run; a lower score is rolled back; a tie or improvement is kept; run ids are distinct. Includes the isolated test runner.</li>
+    <li><strong>The loop itself</strong> (19 tests): a baseline is recorded; a bad proposal is rolled back; a hostile proposal is screened; an AI failure is logged and the run continues; changing a test or the exam stops the run; a lower score is rolled back; a tie is rolled back and only an improvement is kept; run ids are distinct. Includes the isolated test runner.</li>
     <li><strong>The whole thing, end to end</strong> (5 tests): the scripted demo runs five real generations and must produce exactly 63, 75, rejected, 88, rolled back, 100.</li>
   </ol>
 

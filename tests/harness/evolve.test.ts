@@ -126,10 +126,10 @@ describe('runIsolatedTests', () => {
 });
 
 describe('evolve', () => {
-  it('records a passing generation with its score', async () => {
+  it('records a passing generation with its score, but does not keep a no-change proposal', async () => {
     await evolve(options(async (source) => ({ source, proposal: 'no change' })));
     const record = await generationOne();
-    expect(record).toMatchObject({ generation: 1, testPass: true, score: 100, accepted: true });
+    expect(record).toMatchObject({ generation: 1, testPass: true, score: 100, accepted: false });
   });
 
   it('archives a baseline as generation 0 before any proposal', async () => {
@@ -222,10 +222,13 @@ describe('evolve', () => {
     expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
   });
 
-  it('keeps a proposal that ties the best score', async () => {
+  it('rolls back a proposal that only ties the best score', async () => {
     await evolve(options(async (source) => ({ source: `${source}// tie
 `, proposal: 'comment only' })));
-    expect(await generationOne()).toMatchObject({ score: 100, accepted: true });
+    const record = await generationOne();
+    expect(record).toMatchObject({ testPass: true, score: 100, accepted: false, bestScore: 100 });
+    expect(record.rollbackReason).toContain('does not improve');
+    expect(await readFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), 'utf8')).toBe(GOOD_SOURCE);
   });
 
   it('compares each generation with the best kept so far, not the previous attempt', async () => {
@@ -237,7 +240,8 @@ describe('evolve', () => {
 `, proposal: `try ${calls}` };
     }, 2));
     const records = await generationRecords();
-    expect(records.map((r) => r.accepted)).toEqual([false, true]);
+    // Generation 2 only ties the baseline, so it is not kept either.
+    expect(records.map((r) => r.accepted)).toEqual([false, false]);
     expect(records.map((r) => r.bestScore)).toEqual([100, 100]);
   });
 

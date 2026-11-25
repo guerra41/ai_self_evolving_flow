@@ -9,16 +9,27 @@ export async function generateProposal(
   pastScores: number[],
 ): Promise<ProposalResult> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY is not set; use the scripted offline proposer instead');
+  const baseUrl = process.env.OPENAI_BASE_URL;
+  // A hosted API needs a key. A local server (Ollama, LM Studio, llama.cpp) sets
+  // OPENAI_BASE_URL and needs no key, so no Authorization header is sent.
+  if (!apiKey && !baseUrl) {
+    throw new Error(
+      'Neither OPENAI_API_KEY nor OPENAI_BASE_URL is set; use the scripted offline proposer instead',
+    );
   }
 
-  const response = await fetch(`${process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1'}/chat/completions`, {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  // Local models can take minutes per reply on a CPU, so the limit is configurable.
+  const timeoutMs = Number(process.env.LLM_TIMEOUT_MS ?? 600_000);
+
+  const response = await fetch(`${baseUrl ?? 'https://api.openai.com/v1'}/chat/completions`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
       temperature: 0.2,
