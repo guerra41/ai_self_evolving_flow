@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai_self_evolving_flow: purpose and what you are learning</title>
+<style>
+  :root { --ink:#1b2430; --muted:#5b6675; --line:#dfe4ea; --bg:#f7f8fa; --card:#fff; --accent:#1f5fbf; --ok:#17794a; --warn:#a15c00; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:860px; margin:0 auto; padding:40px 24px 80px; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 6px; }
+  .lede { color:var(--muted); margin:0 0 32px; }
+  h2 { font-size:1.35rem; margin:44px 0 10px; padding-top:8px; border-top:1px solid var(--line); }
+  h3 { font-size:1.05rem; margin:24px 0 6px; }
+  p, ul, ol { margin:10px 0; }
+  li { margin:4px 0; }
+  code { background:#eef1f5; padding:1px 6px; border-radius:4px; font:0.9em ui-monospace, Consolas, monospace; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 20px; margin:14px 0; }
+  .callout { border-left:4px solid var(--warn); background:#fff8ec; padding:12px 18px; border-radius:0 8px 8px 0; margin:14px 0; }
+  .callout.ok { border-left-color:var(--ok); background:#eefaf3; }
+  table { width:100%; border-collapse:collapse; margin:14px 0; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:#eef1f5; font-size:0.9rem; }
+  tr:last-child td { border-bottom:0; }
+  .diagram { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:16px 0; overflow-x:auto; }
+  .diagram pre.mermaid { margin:0; text-align:center; background:none; }
+  figcaption { color:var(--muted); font-size:0.9rem; margin-top:8px; text-align:center; }
+  nav.toc { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 20px; }
+  nav.toc ol { margin:6px 0; padding-left:20px; }
+  a { color:var(--accent); }
+  @media print { body { background:#fff; } main { padding:0; } .card, .diagram, table { break-inside:avoid; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>What this project is for, and what you are learning</h1>
+<p class="lede">A plain-language explanation of <code>ai_self_evolving_flow</code>: the question it asks, how the loop works, and what the first real run with a local model taught us.</p>
+
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#question">The big question</a></li>
+    <li><a href="#cast">The cast</a></li>
+    <li><a href="#loop">The loop</a></li>
+    <li><a href="#learning">What you are really learning</a></li>
+    <li><a href="#first-run">What the first real run showed</a></li>
+    <li><a href="#not-shown">What it does not show</a></li>
+    <li><a href="#why">Why it is still worth it</a></li>
+  </ol>
+</nav>
+
+<h2 id="question">1. The big question</h2>
+<p><strong>Can software improve its own code?</strong> A &ldquo;self-evolving&rdquo; system works like this:</p>
+<ol>
+  <li>Something writes a new version of a program.</li>
+  <li>The new version is tested and graded.</li>
+  <li>If it is better, it is kept. If not, it is thrown away.</li>
+  <li>Repeat.</li>
+</ol>
+<p>Research systems such as HyperAgents explore this idea. This project is a small, safe, local version of it. It is not a product. It is a lab bench where you can watch the loop run and see where it breaks.</p>
+
+<h2 id="cast">2. The cast</h2>
+<table>
+  <tr><th style="width:22%">Part</th><th>What it is</th></tr>
+  <tr><td><strong>TaskAgent</strong></td><td><code>src/task-agent/TaskAgent.ts</code>. The program being improved. It solves small text tasks: uppercase, reverse, palindrome, slugify, max number. The starting version is deliberately flawed and scores <strong>63/100</strong>.</td></tr>
+  <tr><td><strong>Proposer</strong></td><td>A thin wrapper around an LLM. It sends one prompt and gets back a new version of the file. No tools, no memory, no planning. The LLM does all the thinking.</td></tr>
+  <tr><td><strong>Harness</strong></td><td>Everything else: source screen, isolated tests, sandbox, grader, tamper check and archive. This is the real work of the project.</td></tr>
+  <tr><td><strong>The exam</strong></td><td><code>eval/</code>. A hidden set of tasks used only for scoring. The Proposer never sees it.</td></tr>
+</table>
+
+<h2 id="loop">3. The loop</h2>
+<p>Each generation goes through these steps. Any rejection restores the best code so far, and every path ends in a line in the archive.</p>
+
+<figure class="diagram">
+<pre class="mermaid">
+flowchart TD
+    START(["Start: baseline<br/>seed tested and scored (63)"]) --> ASK["1. Proposer asks the LLM<br/>for a rewritten TaskAgent"]
+    ASK -->|"call failed"| ARCH
+    ASK --> SCREEN{"2. Source screen:<br/>forbidden imports, eval,<br/>fetch, process?"}
+    SCREEN -->|"violation"| RB1["Rejected, never written to disk"]
+    SCREEN -->|"clean"| TESTS{"3. Unit tests pass<br/>in an isolated copy?"}
+    TESTS -->|"no"| RB2["Rolled back"]
+    TESTS -->|"yes"| SCORE["4. Score on the hidden exam<br/>in a locked-down child process<br/>timeout + memory limit"]
+    SCORE --> TAMPER{"5. Tests, exam or harness<br/>files changed?"}
+    TAMPER -->|"yes"| ABORT["Rolled back, run aborted"]
+    TAMPER -->|"no"| BETTER{"6. Score strictly higher<br/>than the best so far?"}
+    BETTER -->|"no: lower or tie"| RB3["Rolled back"]
+    BETTER -->|"yes"| KEEP["Kept: new best code"]
+    RB1 --> ARCH
+    RB2 --> ARCH
+    RB3 --> ARCH
+    ABORT --> ARCH
+    KEEP --> ARCH["7. Append one line to<br/>outputs/archive.jsonl"]
+    ARCH -->|"next generation"| ASK
+
+    classDef bad fill:#fdecea,stroke:#b3261e,color:#1b2430
+    classDef good fill:#eefaf3,stroke:#17794a,color:#1b2430
+    class RB1,RB2,RB3,ABORT bad
+    class KEEP good
+</pre>
+<figcaption>Figure 1. One generation of <code>pnpm evolve</code>. Red boxes restore the previous best code; green is the only path that changes it.</figcaption>
+</figure>
+
+<ol>
+  <li>The Proposer asks the LLM for a rewritten TaskAgent.</li>
+  <li>The harness screens the code for forbidden things such as <code>eval</code>, <code>fetch</code> or spawning processes.</li>
+  <li>The code is tested in an isolated copy.</li>
+  <li>It is scored on the hidden exam inside a locked-down child process with a timeout and memory limit.</li>
+  <li>The harness checks that the tests, exam and harness files were not tampered with.</li>
+  <li>If the score is <em>strictly higher</em>, the code is kept. Otherwise it is rolled back.</li>
+  <li>One line is appended to <code>outputs/archive.jsonl</code>.</li>
+</ol>
+
+<h2 id="learning">4. What you are really learning</h2>
+
+<h3>1. Safety is the main subject, not intelligence</h3>
+<p>Once an AI can edit code that gets run, the hard question is how to stop it from cheating, breaking things or reaching your machine. Most of the project is guardrails:</p>
+<ul>
+  <li>The AI may edit only one folder.</li>
+  <li>Tests gate every change.</li>
+  <li>Generated code runs in a sandbox.</li>
+  <li>The exam stays hidden.</li>
+  <li>Everything is archived.</li>
+  <li>Hashes catch tampering.</li>
+</ul>
+<p>Each exists because an AI trying to &ldquo;win&rdquo; has easy shortcuts: change the tests, read the answers, hard-code the outputs. The project lets you see that attack surface firsthand.</p>
+
+<h3>2. A measurement has to be honest</h3>
+<p>Before the tie fix, the system said &ldquo;kept&rdquo; for changes that did nothing, like deleting a blank line. That looked like progress and was not. Selecting on a score is easy to fool, even by accident, so rules like &ldquo;strictly higher&rdquo; matter.</p>
+
+<h3>3. The hidden exam creates a real tension</h3>
+<p>The model cannot see what fails, so it cannot fix it. If you show it the failures it can improve, but then you risk it memorizing the exam, which is a form of cheating. Hiding the exam keeps the score trustworthy but makes improvement hard. There is no free answer, and this tension is a core problem in AI evaluation.</p>
+
+<h3>4. Small models cannot do this blind</h3>
+<p>The 14b model made the same trivial edit 10 times and never found the bugs. The loop needs either a more capable model or better feedback. The harness works; the model is the limit.</p>
+
+<h3>5. Who holds the API key</h3>
+<p>The key stays with the harness, which makes the HTTP call. Generated code runs without it. The LLM never needs the key, and hosted and local models are interchangeable. That is why switching to Ollama took only a few lines.</p>
+
+<h3>6. &ldquo;Tests passed&rdquo; does not mean &ldquo;good&rdquo;</h3>
+<p>A rewrite can pass every unit test and still be worthless. Tests catch breakage; the exam measures quality. The archive records both so you can see the difference.</p>
+
+<h2 id="first-run">5. What the first real run showed</h2>
+<div class="card">
+  <p><strong>Setup:</strong> <code>qwen2.5-coder:14b</code> through Ollama on a laptop, 10 generations.</p>
+  <ul>
+    <li>Baseline 63. Every generation scored 63 and was rolled back (&ldquo;does not improve on the best score 63&rdquo;).</li>
+    <li>Each generation made the identical change: it deleted one trailing blank line and never touched the faulty code.</li>
+    <li>It repeats because each rollback restores the exact same code, so the model sees the same input at low temperature and gives nearly the same answer.</li>
+  </ul>
+</div>
+<div class="callout ok">The harness behaved correctly with a real model. The model was not given enough information to find the bugs, which is the hidden exam doing its job.</div>
+
+<h2 id="not-shown">6. What it does not show</h2>
+<div class="callout">
+  <ul>
+    <li><strong>It has not shown AI improving AI.</strong> The only real run produced zero improvement. The scripted demo (63 &rarr; 75 &rarr; 88 &rarr; 100) was written by hand to show the loop working. It is not evidence of learning.</li>
+    <li><strong>It is not a complete security boundary.</strong> The sandbox does not block network access, the code screen is heuristic, and there is no Docker yet.</li>
+    <li><strong>It is tiny.</strong> Five task types is not a general ability.</li>
+  </ul>
+</div>
+
+<h2 id="why">7. Why it is still worth it</h2>
+<p>You now have a working, tested loop with real guardrails, where any model can be swapped in. The interesting experiments come next, and each is cheap to run on a laptop:</p>
+<ul>
+  <li>What minimal feedback lets a small model improve without leaking the exam?</li>
+  <li>Does varying the prompt between tries help?</li>
+  <li>Does a bigger model succeed with the same blind setup?</li>
+  <li>Can a second model attack the guardrails to test them?</li>
+</ul>
+
+</main>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', flowchart: { htmlLabels: true, curve: 'basis' } });
+</script>
+</body>
+</html>
