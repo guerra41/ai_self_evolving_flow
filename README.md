@@ -16,7 +16,12 @@ pnpm install
 Copy-Item .env.example .env
 ```
 
-Set `OPENAI_API_KEY` in `.env` to enable LLM proposals. Without a key, the CLI runs a **scripted offline proposer** (`src/scripted-proposer.ts`): a fixed list of five source patches that lets you watch the whole loop work with no network. It is a demo, not a learning agent: the script was written by hand against the seed's known weaknesses and never reads `eval/`. Two steps are deliberately bad so the guardrails fire (a forbidden import is rejected by the source screen; a change that breaks uppercasing fails the unit tests and is rolled back).
+To enable LLM proposals, pick one in `.env`:
+
+- **Local model with Ollama (free, nothing leaves your machine, no key):** install Ollama, run `ollama pull qwen2.5-coder:14b` (use `qwen2.5-coder:7b` or `3b` if your GPU has little VRAM), then set `OPENAI_BASE_URL=http://localhost:11434/v1` and `OPENAI_MODEL=qwen2.5-coder:14b`. Local models can take minutes per reply; `LLM_TIMEOUT_MS` (default 10 minutes) controls how long to wait.
+- **Hosted API (paid):** set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`).
+
+With neither a base URL nor a key, the CLI runs a **scripted offline proposer** (`src/scripted-proposer.ts`): a fixed list of five source patches that lets you watch the whole loop work with no network. It is a demo, not a learning agent: the script was written by hand against the seed's known weaknesses and never reads `eval/`. Two steps are deliberately bad so the guardrails fire (a forbidden import is rejected by the source screen; a change that breaks uppercasing fails the unit tests and is rolled back).
 
 Expected keyless output from a fresh checkout: baseline 63, then 75, rejected, 88, rolled back, 100.
 
@@ -50,7 +55,7 @@ Failed test attempts are rolled back and receive no scoring phase.
 
 ## Selection
 
-A generation is kept only if it passes the tests and its score is not lower than the best kept score so far (the baseline counts). A lower score restores the previous source and is recorded with `accepted: false` and a `rollbackReason`. If the starting TaskAgent fails its own tests, the run refuses to start.
+A generation is kept only if it passes the tests and its score is strictly higher than the best kept score so far (the baseline counts). A lower score or a tie restores the previous source and is recorded with `accepted: false` and a `rollbackReason`, so whitespace-only or no-op rewrites are never counted as progress. If the starting TaskAgent fails its own tests, the run refuses to start.
 
 ## The starting TaskAgent
 
@@ -72,9 +77,10 @@ The seed is deliberately imperfect so there is something to improve. It passes e
 
 The `.env` file supports:
 
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY` (hosted APIs only; not needed for a local server)
+- `OPENAI_BASE_URL` (set it to use a local server such as Ollama)
 - `OPENAI_MODEL`
+- `LLM_TIMEOUT_MS`
 - `EVOLUTION_GENERATIONS`
 - `SANDBOX_TIMEOUT_MS`
 - `SANDBOX_MEMORY_MB`
