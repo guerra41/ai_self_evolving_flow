@@ -2,7 +2,14 @@ import { access, cp, mkdir, mkdtemp, readFile, rm, rmdir, symlink, writeFile } f
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { evolve, type ArchiveRecord, type ProposeFn } from '../../src/evolve.js';
+import {
+  addAttempt,
+  classifyChange,
+  evolve,
+  type ArchiveRecord,
+  type AttemptSummary,
+  type ProposeFn,
+} from '../../src/evolve.js';
 import { runIsolatedTests } from '../../src/test-runner.js';
 
 // Each generation runs a real isolated vitest process (about 2 s), so multi-generation
@@ -256,5 +263,85 @@ describe('evolve', () => {
   it('generates a run id when none is given', async () => {
     await evolve(options(async (source) => ({ source, proposal: 'a' })));
     expect((await readArchive())[0].runId).toMatch(/^\d{8}T\d{6}Z-[0-9a-f]{4}$/);
+  });
+});
+
+describe('attempt history given to the proposer', () => {
+  function recordingProposer(next: (call: number, source: string) => string) {
+    const seen: AttemptSummary[][] = [];
+    const propose: ProposeFn = async (source, _prompts, _scores, history) => {
+      seen.push(history);
+      return { source: next(seen.length, source), proposal: `try ${seen.length}` };
+    };
+    return { seen, propose };
+  }
+
+  it('is empty on the first generation and records a no-change attempt afterwards', async () => {
+    const { seen, propose } = recordingProposer((_call, source) => source);
+    await evolve(options(propose, 2));
+    expect(seen[0]).toEqual([]);
+    expect(seen[1]).toEqual([
+      expect.objectContaining({ outcome: 'not_better', change: 'none', score: 100, times: 1 }),
+    ]);
+  });
+
+  it('collapses identical repeated attempts into one entry with a count', async () => {
+    const { seen, propose } = recordingProposer((_call, source) => `${source}\n\n`);
+    await evolve(options(propose, 3));
+    expect(seen[1]).toHaveLength(1);
+    expect(seen[2]).toHaveLength(1);
+    expect(seen[2][0]).toMatchObject({ outcome: 'not_better', change: 'formatting_only', times: 2 });
+  });
+
+  it('reports failed tests and lower scores without leaking test or exam details', async () => {
+    const proposals = [BROKEN_SOURCE, WEAK_SOURCE];
+    const { seen, propose } = recordingProposer((call, source) => proposals[call - 1] ?? source);
+    await evolve(options(propose, 3));
+    const last = seen[2];
+    expect(last.map((entry) => entry.outcome)).toEqual(['tests_failed', 'lower_score']);
+    expect(last.map((entry) => entry.score)).toEqual([null, 0]);
+    expect(last.map((entry) => entry.change)).toEqual(['code', 'code']);
+    const text = JSON.stringify(last);
+    // Test output and per-task exam results must never reach the proposer.
+    for (const forbidden of ['incorrect result', 'AssertionError', 'FROZEN', 'frozen', 'expected']) {
+      expect(text).not.toContain(forbidden);
+    }
+  });
+
+  it('reports a kept change with its score', async () => {
+    await writeFile(join(root, 'src', 'task-agent', 'TaskAgent.ts'), WEAK_SOURCE);
+    const { seen, propose } = recordingProposer((call, source) => (call === 1 ? GOOD_SOURCE : source));
+    await evolve(options(propose, 2));
+    expect(seen[1]).toEqual([
+      expect.objectContaining({ outcome: 'kept', change: 'code', score: 100, times: 1 }),
+    ]);
+  });
+
+  it('hands the proposer copies, so it cannot edit the harness record', async () => {
+    const calls: AttemptSummary[][] = [];
+    await evolve(options(async (source, _prompts, _scores, history) => {
+      calls.push(history.map((entry) => ({ ...entry })));
+      history.push({ outcome: 'kept', change: 'code', score: 100, diff: 'forged', times: 99 });
+      return { source, proposal: 'tamper with history' };
+    }, 2));
+    expect(calls[1].map((entry) => entry.diff)).not.toContain('forged');
+  });
+});
+
+describe('classifyChange and addAttempt', () => {
+  it('classifies identical, whitespace-only and real changes', () => {
+    expect(classifyChange('a b', 'a b')).toBe('none');
+    expect(classifyChange('a b\n', 'a   b')).toBe('formatting_only');
+    expect(classifyChange('a b', 'a c')).toBe('code');
+  });
+
+  it('keeps at most 8 entries and caps long diffs', () => {
+    const history: AttemptSummary[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      addAttempt(history, { outcome: 'not_better', change: 'code', score: 1, diff: `change ${i} ${'x'.repeat(2000)}` });
+    }
+    expect(history).toHaveLength(8);
+    expect(history[0].diff).toContain('change 4');
+    expect(history.every((entry) => entry.diff.length <= 800)).toBe(true);
   });
 });

@@ -11,11 +11,61 @@ export interface Proposal {
   proposal: string;
 }
 
+/** What happened to one earlier proposal in this run, as the Proposer is allowed to see it. */
+export type AttemptOutcome =
+  | 'kept'
+  | 'not_better'
+  | 'lower_score'
+  | 'tests_failed'
+  | 'rejected_by_screen'
+  | 'proposal_failed';
+
+/**
+ * A short, safe summary of earlier attempts handed to the Proposer. It deliberately holds
+ * no test output and no per-task exam results: only the outcome, the score (which the
+ * Proposer already receives as pastScores), what kind of change it was, and the
+ * Proposer's own diff. Identical repeats collapse into one entry with a count.
+ */
+export interface AttemptSummary {
+  outcome: AttemptOutcome;
+  /** 'none': identical source. 'formatting_only': differs only in whitespace. 'code': anything else. */
+  change: 'none' | 'formatting_only' | 'code';
+  score: number | null;
+  diff: string;
+  times: number;
+}
+
 export type ProposeFn = (
   currentSource: string,
   trainingPrompts: string[],
   pastScores: number[],
+  history: AttemptSummary[],
 ) => Promise<Proposal>;
+
+const HISTORY_MAX_ENTRIES = 8;
+const HISTORY_MAX_DIFF_CHARS = 800;
+
+export function classifyChange(before: string, after: string): AttemptSummary['change'] {
+  if (before === after) {
+    return 'none';
+  }
+  return before.replace(/\s+/g, '') === after.replace(/\s+/g, '') ? 'formatting_only' : 'code';
+}
+
+/** Adds an attempt, merging it into an identical earlier one, and keeps the list bounded. */
+export function addAttempt(history: AttemptSummary[], attempt: Omit<AttemptSummary, 'times'>): void {
+  const diff = attempt.diff.slice(0, HISTORY_MAX_DIFF_CHARS);
+  const same = history.find((entry) => entry.outcome === attempt.outcome && entry.diff === diff);
+  if (same) {
+    same.times += 1;
+    same.score = attempt.score;
+    return;
+  }
+  history.push({ ...attempt, diff, times: 1 });
+  if (history.length > HISTORY_MAX_ENTRIES) {
+    history.shift();
+  }
+}
 
 export interface EvolveOptions {
   root: string;
@@ -128,6 +178,7 @@ export async function evolve(options: EvolveOptions): Promise<void> {
 
   let bestScore = baselineEvaluation.score;
   const pastScores: number[] = [bestScore];
+  const history: AttemptSummary[] = [];
   await archive({
     generation: 0,
     codeDiff: '--- baseline: starting TaskAgent ---',
@@ -144,8 +195,15 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     const bestSource = await readFile(sourcePath, 'utf8');
     let proposal: Proposal;
     try {
-      proposal = await propose(bestSource, trainingPrompts, pastScores);
+      // The Proposer gets copies, so it cannot rewrite the harness's own record.
+      proposal = await propose(
+        bestSource,
+        trainingPrompts,
+        [...pastScores],
+        history.map((entry) => ({ ...entry })),
+      );
     } catch (error) {
+      addAttempt(history, { outcome: 'proposal_failed', change: 'none', score: null, diff: '' });
       await archive({
         generation,
         codeDiff: '--- proposal failed ---',
@@ -162,7 +220,10 @@ export async function evolve(options: EvolveOptions): Promise<void> {
 
     // Static screen first: rejected code is never written to disk or executed.
     const violations = screenSource(proposal.source);
+    const change = classifyChange(bestSource, proposal.source);
+    const attemptDiff = unifiedDiff(bestSource, proposal.source);
     if (violations.length > 0) {
+      addAttempt(history, { outcome: 'rejected_by_screen', change, score: null, diff: attemptDiff });
       await archive({
         generation,
         codeDiff: unifiedDiff(bestSource, proposal.source),
@@ -183,6 +244,7 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     await checkTamper(generation, bestSource, proposal.source, proposal.proposal, bestScore);
 
     if (!testResult.passed) {
+      addAttempt(history, { outcome: 'tests_failed', change, score: null, diff: attemptDiff });
       await writeFile(sourcePath, bestSource, 'utf8');
       await archive({
         generation,
@@ -203,6 +265,12 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     pastScores.push(evaluation.score);
 
     if (evaluation.score <= bestScore) {
+      addAttempt(history, {
+        outcome: evaluation.score < bestScore ? 'lower_score' : 'not_better',
+        change,
+        score: evaluation.score,
+        diff: attemptDiff,
+      });
       const reason =
         evaluation.score < bestScore
           ? `score ${evaluation.score} is below the best score ${bestScore}`
@@ -224,6 +292,7 @@ export async function evolve(options: EvolveOptions): Promise<void> {
     }
 
     bestScore = evaluation.score;
+    addAttempt(history, { outcome: 'kept', change, score: evaluation.score, diff: attemptDiff });
     await archive({
       generation,
       codeDiff: unifiedDiff(bestSource, proposal.source),

@@ -1,12 +1,24 @@
+import type { AttemptSummary } from './evolve.js';
+
 export interface ProposalResult {
   source: string;
   proposal: string;
 }
 
+export const SYSTEM_PROMPT =
+  'You improve src/task-agent/TaskAgent.ts only. Return exactly one fenced typescript code block containing the complete file. ' +
+  'Do not mention evaluation data or tests. Preserve the exported Task type and solveTask function. ' +
+  'pastScores are scores out of 100 on hidden checks; your goal is to raise the score. ' +
+  'previousAttempts lists your earlier tries in this run: outcome, the score it got, the kind of change ' +
+  '(none, formatting_only or code), the diff, and how many times that exact change was tried. ' +
+  'Never repeat a change that did not raise the score. Changes that only touch whitespace, formatting or comments ' +
+  'cannot raise it. Instead, find real mistakes in the logic and fix the behavior.';
+
 export async function generateProposal(
   currentSource: string,
   trainingPrompts: string[],
   pastScores: number[],
+  previousAttempts: AttemptSummary[] = [],
 ): Promise<ProposalResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   const baseUrl = process.env.OPENAI_BASE_URL;
@@ -36,14 +48,14 @@ export async function generateProposal(
       messages: [
         {
           role: 'system',
-          content:
-            'You improve src/task-agent/TaskAgent.ts only. Return exactly one fenced typescript code block containing the complete file. Do not mention evaluation data or tests. Preserve the exported Task type and solveTask function.',
+          content: SYSTEM_PROMPT,
         },
         {
           role: 'user',
           content: JSON.stringify({
             trainingPrompts,
             pastScores,
+            previousAttempts,
             currentSource,
           }),
         },
